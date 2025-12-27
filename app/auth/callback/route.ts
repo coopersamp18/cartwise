@@ -8,8 +8,22 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    const { error, data } = await supabase.auth.exchangeCodeForSession(code);
+    
+    if (!error && data.user) {
+      // Check if user has a subscription
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+
+      // If no subscription, redirect to subscribe page
+      if (!subscription) {
+        return NextResponse.redirect(`${origin}/auth/subscribe`);
+      }
+
+      // If subscription exists, proceed to the intended destination
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

@@ -66,3 +66,15 @@ export type RecipeCategory =
   | "Side Dish"
   | "Soup"
   | "Salad";
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  polar_customer_id: string | null;
+  polar_subscription_id: string | null;
+  status: "trial" | "active" | "canceled" | "expired" | "inactive";
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
+}

@@ -50,6 +50,19 @@ CREATE TABLE IF NOT EXISTS shopping_list (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Subscriptions table
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
+  polar_customer_id TEXT,
+  polar_subscription_id TEXT,
+  status TEXT NOT NULL DEFAULT 'inactive',
+  trial_ends_at TIMESTAMP WITH TIME ZONE,
+  current_period_end TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_recipes_user_id ON recipes(user_id);
 CREATE INDEX IF NOT EXISTS idx_recipes_is_selected ON recipes(is_selected);
@@ -57,6 +70,8 @@ CREATE INDEX IF NOT EXISTS idx_recipe_steps_recipe_id ON recipe_steps(recipe_id)
 CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe_id ON recipe_ingredients(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_shopping_list_user_id ON shopping_list(user_id);
 CREATE INDEX IF NOT EXISTS idx_shopping_list_checked ON shopping_list(checked);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
 
 -- Row Level Security (RLS) Policies
 
@@ -65,6 +80,7 @@ ALTER TABLE recipes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recipe_steps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recipe_ingredients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shopping_list ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Recipes policies
 CREATE POLICY "Users can view their own recipes" ON recipes
@@ -149,3 +165,13 @@ CREATE POLICY "Users can update their shopping list" ON shopping_list
 
 CREATE POLICY "Users can delete from their shopping list" ON shopping_list
   FOR DELETE USING (auth.uid() = user_id);
+
+-- Subscriptions policies
+CREATE POLICY "Users can view their own subscription" ON subscriptions
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own subscription" ON subscriptions
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own subscription" ON subscriptions
+  FOR UPDATE USING (auth.uid() = user_id);

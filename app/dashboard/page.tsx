@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
-import { Recipe, ShoppingListItem } from "@/lib/types";
+import { Recipe, ShoppingListItem, Subscription } from "@/lib/types";
 import { 
   ChefHat, 
   Plus, 
@@ -41,6 +41,8 @@ export default function DashboardPage() {
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<{ email?: string } | null>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number>(0);
   const router = useRouter();
   const supabase = createClient();
 
@@ -78,6 +80,26 @@ export default function DashboardPage() {
       setUser(user);
       if (user) {
         loadData();
+        
+        // Load subscription info
+        const { data: subData } = await supabase
+          .from("subscriptions")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        
+        if (subData) {
+          setSubscription(subData);
+          
+          // Calculate trial days remaining
+          if (subData.status === "trial" && subData.trial_ends_at) {
+            const now = new Date();
+            const trialEnd = new Date(subData.trial_ends_at);
+            const diffTime = trialEnd.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            setTrialDaysRemaining(Math.max(0, diffDays));
+          }
+        }
       }
     };
 
@@ -211,6 +233,18 @@ export default function DashboardPage() {
           </div>
         </div>
       </nav>
+
+      {/* Trial Banner */}
+      {subscription?.status === "trial" && trialDaysRemaining > 0 && (
+        <div className="bg-primary/10 border-b border-primary/20">
+          <div className="max-w-6xl mx-auto px-6 py-3">
+            <p className="text-sm text-center">
+              <strong>Free Trial Active:</strong> You have {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""} remaining. 
+              Enjoying Cartwise? Your subscription will automatically continue at $5/month.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-6 py-8">
