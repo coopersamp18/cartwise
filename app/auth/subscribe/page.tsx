@@ -8,6 +8,7 @@ import { ChefHat, Check, Sparkles } from "lucide-react";
 
 export default function SubscribePage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingEmail, setIsLoadingEmail] = useState(true);
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const router = useRouter();
@@ -16,14 +17,22 @@ export default function SubscribePage() {
   useEffect(() => {
     // Get the user's email
     const getUserEmail = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user?.email) {
-        setEmail(user.email);
-      } else {
-        // If no user, redirect to login
-        router.push("/auth/login");
+      try {
+        setIsLoadingEmail(true);
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user?.email) {
+          setEmail(user.email);
+        } else {
+          // If no user, redirect to login
+          router.push("/auth/login");
+        }
+      } catch (err) {
+        console.error("Error getting user email:", err);
+        setError("Unable to load your account. Please try again.");
+      } finally {
+        setIsLoadingEmail(false);
       }
     };
 
@@ -31,6 +40,12 @@ export default function SubscribePage() {
   }, [supabase, router]);
 
   const handleStartTrial = async () => {
+    // Validate email is loaded
+    if (!email) {
+      setError("Please wait while we load your account information.");
+      return;
+    }
+
     setIsLoading(true);
     setError("");
 
@@ -44,11 +59,36 @@ export default function SubscribePage() {
         body: JSON.stringify({ email }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to create checkout session");
+      // Clone the response so we can read it multiple times if needed
+      const responseClone = response.clone();
+      let data;
+      
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        // If response is not JSON, get text instead
+        const text = await responseClone.text();
+        console.error("Non-JSON response:", text);
+        throw new Error(`Server error: ${response.status} ${response.statusText}. ${text.substring(0, 200)}`);
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        // Check if user already has a subscription
+        if (data?.hasSubscription || data?.error?.includes("already have")) {
+          // Redirect to dashboard if they already have a subscription
+          router.push("/dashboard");
+          return;
+        }
+        
+        // Try to get a more specific error message
+        const errorMessage = data?.error || data?.message || "Failed to create checkout session";
+        console.error("Checkout error details:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: data,
+        });
+        throw new Error(errorMessage);
+      }
 
       // Redirect to Polar checkout
       if (data.checkoutUrl) {
@@ -58,9 +98,11 @@ export default function SubscribePage() {
       }
     } catch (err) {
       console.error("Error starting trial:", err);
-      setError(
-        "Unable to start your trial. Please try again or contact support."
-      );
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Unable to start your trial. Please try again or contact support.";
+      setError(errorMessage);
       setIsLoading(false);
     }
   };
@@ -125,11 +167,12 @@ export default function SubscribePage() {
           {/* CTA Button */}
           <Button
             onClick={handleStartTrial}
-            isLoading={isLoading}
+            isLoading={isLoading || isLoadingEmail}
+            disabled={isLoadingEmail || !email}
             className="w-full md:w-auto px-12 py-6 text-lg"
             size="lg"
           >
-            Start Free Trial
+            {isLoadingEmail ? "Loading..." : "Start Free Trial"}
           </Button>
 
           <p className="text-xs text-muted-foreground mt-6">

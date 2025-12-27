@@ -9,12 +9,16 @@ This document lists all required environment variables for Cartwise.
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 **Where to find:**
 - Log in to your Supabase project
 - Go to Settings → API
 - Copy the Project URL and anon/public key
+- **Service Role Key**: Same page, but use the `service_role` key (starts with `eyJ...`)
+  - ⚠️ **IMPORTANT**: Keep this secret! Only use server-side, never expose to client
+  - Required for webhooks to bypass RLS policies
 
 ### OpenAI Configuration
 
@@ -54,6 +58,7 @@ NEXT_PUBLIC_POLAR_PRODUCT_ID=prod_...
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 
 # OpenAI
 OPENAI_API_KEY=

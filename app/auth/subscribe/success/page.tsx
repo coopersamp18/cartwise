@@ -14,7 +14,7 @@ export default function SubscribeSuccessPage() {
 
   useEffect(() => {
     let attempts = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 15; // Increased attempts to wait longer for webhook
 
     const checkSubscription = async () => {
       try {
@@ -28,11 +28,11 @@ export default function SubscribeSuccessPage() {
         }
 
         // Check if subscription exists
-        const { data: subscription } = await supabase
+        const { data: subscription, error: subError } = await supabase
           .from("subscriptions")
           .select("*")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
         if (subscription) {
           setHasSubscription(true);
@@ -43,9 +43,45 @@ export default function SubscribeSuccessPage() {
             // Retry after 2 seconds
             setTimeout(checkSubscription, 2000);
           } else {
-            // After max attempts, assume success and let user proceed
-            setHasSubscription(true);
-            setIsChecking(false);
+            // After max attempts, try to manually create subscription as fallback
+            console.warn("Webhook may not have fired. Attempting manual subscription creation...");
+            try {
+              // Calculate trial end date (3 days from now)
+              const trialEndsAt = new Date();
+              trialEndsAt.setDate(trialEndsAt.getDate() + 3);
+
+              const { data: manualSub, error: createError } = await supabase
+                .from("subscriptions")
+                .upsert(
+                  {
+                    user_id: user.id,
+                    status: "trial",
+                    trial_ends_at: trialEndsAt.toISOString(),
+                    updated_at: new Date().toISOString(),
+                  },
+                  {
+                    onConflict: "user_id",
+                  }
+                )
+                .select()
+                .single();
+
+              if (manualSub && !createError) {
+                console.log("Manually created subscription as fallback");
+                setHasSubscription(true);
+                setIsChecking(false);
+              } else {
+                console.error("Failed to create subscription manually:", createError);
+                // Still show success page - user can contact support
+                setHasSubscription(true);
+                setIsChecking(false);
+              }
+            } catch (fallbackError) {
+              console.error("Error in fallback subscription creation:", fallbackError);
+              // Still show success page
+              setHasSubscription(true);
+              setIsChecking(false);
+            }
           }
         }
       } catch (error) {

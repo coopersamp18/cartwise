@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 
@@ -53,9 +53,15 @@ export async function POST(request: Request) {
     const event = JSON.parse(body);
     const eventType = event.type;
 
-    console.log("Received Polar webhook:", eventType);
+    console.log("Received Polar webhook:", {
+      type: eventType,
+      eventId: event.id,
+      timestamp: event.timestamp,
+      hasData: !!event.data,
+    });
 
-    const supabase = await createClient();
+    // Use service role client to bypass RLS for webhook operations
+    const supabase = createServiceRoleClient();
 
     // Handle different event types
     switch (eventType) {
@@ -65,30 +71,56 @@ export async function POST(request: Request) {
         const customerId = event.data.customer_id;
         const subscriptionId = event.data.subscription_id;
 
+        console.log("Processing checkout.completed:", {
+          userId,
+          customerId,
+          subscriptionId,
+          eventData: event.data,
+        });
+
         if (!userId) {
-          console.error("No user_id in checkout metadata");
-          break;
+          console.error("No user_id in checkout metadata. Event data:", JSON.stringify(event.data, null, 2));
+          return NextResponse.json(
+            { error: "Missing user_id in metadata" },
+            { status: 400 }
+          );
         }
 
         // Calculate trial end date (3 days from now)
         const trialEndsAt = new Date();
         trialEndsAt.setDate(trialEndsAt.getDate() + 3);
 
-        await supabase.from("subscriptions").upsert(
-          {
-            user_id: userId,
-            polar_customer_id: customerId,
-            polar_subscription_id: subscriptionId,
-            status: "trial",
-            trial_ends_at: trialEndsAt.toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "user_id",
-          }
-        );
+        const { data: subscription, error: upsertError } = await supabase
+          .from("subscriptions")
+          .upsert(
+            {
+              user_id: userId,
+              polar_customer_id: customerId,
+              polar_subscription_id: subscriptionId,
+              status: "trial",
+              trial_ends_at: trialEndsAt.toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            {
+              onConflict: "user_id",
+            }
+          )
+          .select()
+          .single();
 
-        console.log("Created trial subscription for user:", userId);
+        if (upsertError) {
+          console.error("Error creating subscription:", upsertError);
+          return NextResponse.json(
+            { error: "Failed to create subscription", details: upsertError.message },
+            { status: 500 }
+          );
+        }
+
+        console.log("Successfully created trial subscription:", {
+          userId,
+          subscriptionId,
+          subscription,
+        });
         break;
       }
 
