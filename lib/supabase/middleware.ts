@@ -14,7 +14,7 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
@@ -37,7 +37,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes
+  // Protected routes - require authentication
   if (
     !user &&
     (request.nextUrl.pathname.startsWith("/dashboard") ||
@@ -48,10 +48,52 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect logged in users away from auth pages
+  // Check subscription for protected routes (but allow /auth/subscribe paths)
   if (
     user &&
-    (request.nextUrl.pathname.startsWith("/auth"))
+    (request.nextUrl.pathname.startsWith("/dashboard") ||
+      request.nextUrl.pathname.startsWith("/recipe")) &&
+    !request.nextUrl.pathname.startsWith("/auth/subscribe")
+  ) {
+    // Check if user has an active subscription
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!subscription) {
+      // No subscription record - redirect to subscribe page
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/subscribe";
+      return NextResponse.redirect(url);
+    }
+
+    // Check if subscription is active or trial is valid
+    const now = new Date();
+    const isTrialActive =
+      subscription.status === "trial" &&
+      subscription.trial_ends_at &&
+      new Date(subscription.trial_ends_at) > now;
+
+    const isSubscriptionActive =
+      subscription.status === "active" &&
+      subscription.current_period_end &&
+      new Date(subscription.current_period_end) > now;
+
+    if (!isTrialActive && !isSubscriptionActive) {
+      // Subscription expired - redirect to subscribe page
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/subscribe";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // Redirect logged in users away from auth pages (except subscribe pages)
+  if (
+    user &&
+    request.nextUrl.pathname.startsWith("/auth") &&
+    !request.nextUrl.pathname.startsWith("/auth/subscribe")
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
