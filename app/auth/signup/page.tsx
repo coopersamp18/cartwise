@@ -69,16 +69,60 @@ export default function SignupPage() {
         </div>
 
         <div className="flex-1 flex items-center justify-center px-6 pb-20">
-          <div className="w-full max-w-md text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Check className="w-8 h-8 text-green-600" />
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Check className="w-8 h-8 text-green-600" />
+              </div>
+              <h1 className="font-serif text-2xl font-bold mb-4">Check your email</h1>
+              <p className="text-muted-foreground mb-2">
+                We&apos;ve sent a confirmation link to:
+              </p>
+              <p className="text-foreground font-medium mb-6">{email}</p>
             </div>
-            <h1 className="font-serif text-2xl font-bold mb-4">Check your email</h1>
-            <p className="text-muted-foreground mb-8">
-              We&apos;ve sent a confirmation link to <strong>{email}</strong>. 
-              Click the link to verify your account and get started.
-            </p>
-            <Button variant="secondary" onClick={() => router.push("/auth/login")}>
+
+            {/* Instructions Card */}
+            <div className="card p-6 mb-6">
+              <h2 className="font-semibold mb-4 text-sm">Next steps:</h2>
+              <ol className="space-y-3 text-sm text-muted-foreground">
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-medium">
+                    1
+                  </span>
+                  <span>Open your email inbox and look for our confirmation email</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-medium">
+                    2
+                  </span>
+                  <span>Click the confirmation link in the email</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-medium">
+                    3
+                  </span>
+                  <span>You&apos;ll be redirected back here and can start using Cartwise</span>
+                </li>
+              </ol>
+            </div>
+
+            {/* Troubleshooting */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+              <p className="text-amber-900 text-sm font-medium mb-2">
+                Don&apos;t see the email?
+              </p>
+              <ul className="text-amber-800 text-xs space-y-1">
+                <li>• Check your spam or junk folder</li>
+                <li>• Make sure you entered the correct email address</li>
+                <li>• Wait a few minutes - it can take up to 5 minutes to arrive</li>
+              </ul>
+            </div>
+
+            <Button 
+              variant="secondary" 
+              className="w-full"
+              onClick={() => router.push("/auth/login")}
+            >
               Back to login
             </Button>
           </div>

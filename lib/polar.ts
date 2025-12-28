@@ -72,3 +72,23 @@ export function getPolarWebhookSecret(): string {
 export function isPolarSandbox(): boolean {
   return process.env.POLAR_USE_SANDBOX === "true";
 }
+
+/**
+ * Gets the appropriate Polar organization slug for the current environment
+ * @returns Organization slug string
+ */
+export function getPolarOrgSlug(): string {
+  const useSandbox = process.env.POLAR_USE_SANDBOX === "true";
+  
+  const orgSlug = useSandbox
+    ? process.env.POLAR_SANDBOX_ORG_SLUG || process.env.POLAR_ORG_SLUG
+    : process.env.POLAR_ORG_SLUG;
+
+  if (!orgSlug) {
+    throw new Error(
+      `Missing Polar organization slug for ${useSandbox ? "sandbox" : "production"} environment`
+    );
+  }
+
+  return orgSlug;
+}

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui";
-import { ChefHat, Check, Sparkles } from "lucide-react";
+import { ChefHat, Check, Sparkles, LogOut } from "lucide-react";
 
 export default function SubscribePage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -107,6 +107,17 @@ export default function SubscribePage() {
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      router.push("/auth/login");
+      router.refresh();
+    } catch (err) {
+      console.error("Error signing out:", err);
+      setError("Unable to sign out. Please try again.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-2xl">
@@ -181,6 +192,22 @@ export default function SubscribePage() {
             <br />
             Cancel anytime before then at no cost.
           </p>
+
+          {/* Account Info & Sign Out */}
+          {email && (
+            <div className="mt-8 pt-6 border-t border-border">
+              <p className="text-sm text-muted-foreground mb-3">
+                Subscribing with: <span className="font-medium text-foreground">{email}</span>
+              </p>
+              <button
+                onClick={handleSignOut}
+                className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Using a different account? Sign out here
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Trust Badge */}

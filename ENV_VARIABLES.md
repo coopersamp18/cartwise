@@ -40,6 +40,7 @@ You can configure both sandbox and production keys, then switch between them usi
 POLAR_API_KEY=polar_sk_production_key_here
 POLAR_WEBHOOK_SECRET=whsec_production_secret_here
 NEXT_PUBLIC_POLAR_PRODUCT_ID=prod_production_product_id_here
+POLAR_ORG_SLUG=your-org-slug-here
 ```
 
 **Sandbox Keys (Optional - for testing):**
@@ -47,6 +48,7 @@ NEXT_PUBLIC_POLAR_PRODUCT_ID=prod_production_product_id_here
 POLAR_SANDBOX_API_KEY=polar_sk_sandbox_key_here
 POLAR_SANDBOX_WEBHOOK_SECRET=whsec_sandbox_secret_here
 NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID=prod_sandbox_product_id_here
+POLAR_SANDBOX_ORG_SLUG=your-sandbox-org-slug-here
 ```
 
 **Environment Switch:**
@@ -59,10 +61,12 @@ POLAR_USE_SANDBOX=true  # Set to "true" to use sandbox, "false" or omit for prod
   - **API Key**: Settings → API Keys (in sandbox dashboard)
   - **Webhook Secret**: Settings → Webhooks → Create endpoint (in sandbox dashboard)
   - **Product ID**: Products → Your product → Copy ID (create a test product in sandbox)
+  - **Organization Slug**: Found in your dashboard URL (e.g., `https://sandbox.polar.sh/your-org-slug`) or in Settings → Organization
 - **For Production**: Log in to Polar dashboard (polar.sh)
   - **API Key**: Settings → API Keys
   - **Webhook Secret**: Settings → Webhooks → Create endpoint
   - **Product ID**: Products → Your product → Copy ID
+  - **Organization Slug**: Found in your dashboard URL (e.g., `https://polar.sh/your-org-slug`) or in Settings → Organization
 
 **Note**: You can keep both sets of keys in your `.env.local` file. Set `POLAR_USE_SANDBOX=true` to use sandbox, or set it to `false`/remove it to use production. The application will automatically use the correct API endpoint based on this setting.
 
@@ -88,11 +92,13 @@ OPENAI_API_KEY=
 POLAR_API_KEY=
 POLAR_WEBHOOK_SECRET=
 NEXT_PUBLIC_POLAR_PRODUCT_ID=
+POLAR_ORG_SLUG=
 
 # Polar (Subscriptions - Sandbox/Testing - Optional)
 POLAR_SANDBOX_API_KEY=
 POLAR_SANDBOX_WEBHOOK_SECRET=
 NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID=
+POLAR_SANDBOX_ORG_SLUG=
 POLAR_USE_SANDBOX=true  # Set to "true" for sandbox, "false" or omit for production
 ```
 

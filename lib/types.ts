@@ -78,3 +78,13 @@ export interface Subscription {
   created_at: string;
   updated_at: string;
 }
+
+export interface Profile {
+  id: string;
+  user_id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  preferences: Record<string, any> | null;
+  created_at: string;
+  updated_at: string;
+}

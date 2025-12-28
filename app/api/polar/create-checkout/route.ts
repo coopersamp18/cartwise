@@ -83,8 +83,7 @@ export async function POST(request: Request) {
       const checkout = await polar.checkouts.create({
         products: [productId],
         successUrl: successUrl,
-        // Note: We're NOT including customerEmail to prevent Polar from auto-populating
-        // with old email addresses. The user will enter their email fresh in the checkout.
+        customerEmail: email, // Pre-fill the email in the checkout form
         metadata: {
           user_id: user.id,
           user_email: email, // Store email in metadata for webhook processing

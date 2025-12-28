@@ -5,19 +5,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input } from "@/components/ui";
-import { ChefHat, ArrowLeft } from "lucide-react";
+import { ChefHat, ArrowLeft, Mail, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isResendingEmail, setIsResendingEmail] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
+  const [isEmailNotConfirmed, setIsEmailNotConfirmed] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsEmailNotConfirmed(false);
+    setResendSuccess(false);
     setIsLoading(true);
 
     try {
@@ -27,7 +32,13 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setError(error.message);
+        // Check if the error is due to unconfirmed email
+        if (error.message.toLowerCase().includes("email not confirmed")) {
+          setIsEmailNotConfirmed(true);
+          setError("Your email address hasn't been confirmed yet.");
+        } else {
+          setError(error.message);
+        }
         return;
       }
 
@@ -37,6 +48,37 @@ export default function LoginPage() {
       setError("An unexpected error occurred");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email) {
+      setError("Please enter your email address first");
+      return;
+    }
+
+    setIsResendingEmail(true);
+    setError("");
+    setResendSuccess(false);
+
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) {
+        setError(error.message);
+      } else {
+        setResendSuccess(true);
+      }
+    } catch {
+      setError("Failed to resend confirmation email");
+    } finally {
+      setIsResendingEmail(false);
     }
   };
 
@@ -93,8 +135,45 @@ export default function LoginPage() {
               />
 
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
-                  {error}
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-red-600 text-sm font-medium">{error}</p>
+                      {isEmailNotConfirmed && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-red-600 text-xs">
+                            Please check your inbox (and spam folder) for the confirmation email we sent you.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleResendConfirmation}
+                            disabled={isResendingEmail}
+                            className="text-xs text-red-700 hover:text-red-800 underline font-medium disabled:opacity-50"
+                          >
+                            {isResendingEmail ? "Sending..." : "Resend confirmation email"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {resendSuccess && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <Mail className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-green-700 text-sm font-medium">
+                        Confirmation email sent!
+                      </p>
+                      <p className="text-green-600 text-xs mt-1">
+                        Check your inbox at <strong>{email}</strong> for the confirmation link. 
+                        Don&apos;t forget to check your spam folder.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 

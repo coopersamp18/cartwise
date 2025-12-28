@@ -5,19 +5,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { Recipe, ShoppingListItem, Subscription } from "@/lib/types";
 import { 
   ChefHat, 
   Plus, 
   BookOpen, 
   ShoppingCart, 
-  LogOut, 
   Clock, 
   Users,
   Check,
   Trash2,
   Square,
-  CheckSquare
+  CheckSquare,
+  X
 } from "lucide-react";
 
 const AISLE_ORDER = [
@@ -43,6 +44,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<{ email?: string } | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [trialDaysRemaining, setTrialDaysRemaining] = useState<number>(0);
+  const [showTrialBanner, setShowTrialBanner] = useState(true);
   const router = useRouter();
   const supabase = createClient();
 
@@ -106,11 +108,6 @@ export default function DashboardPage() {
     getUser();
   }, [supabase, loadData]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
-  };
 
   const toggleRecipeSelection = async (recipeId: string, isSelected: boolean) => {
     // Update recipe selection
@@ -222,26 +219,25 @@ export default function DashboardPage() {
             <ChefHat className="w-8 h-8 text-primary" />
             <span className="font-serif text-xl font-bold">Cartwise</span>
           </Link>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground hidden sm:block">
-              {user?.email}
-            </span>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign out
-            </Button>
-          </div>
+          <ProfileDropdown />
         </div>
       </nav>
 
       {/* Trial Banner */}
-      {subscription?.status === "trial" && trialDaysRemaining > 0 && (
+      {subscription?.status === "trial" && trialDaysRemaining > 0 && showTrialBanner && (
         <div className="bg-primary/10 border-b border-primary/20">
-          <div className="max-w-6xl mx-auto px-6 py-3">
-            <p className="text-sm text-center">
+          <div className="max-w-6xl mx-auto px-6 py-3 relative">
+            <p className="text-sm text-center pr-8">
               <strong>Free Trial Active:</strong> You have {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""} remaining. 
               Enjoying Cartwise? Your subscription will automatically continue at $5/month.
             </p>
+            <button
+              onClick={() => setShowTrialBanner(false)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-primary/20 rounded-lg transition-colors"
+              title="Close banner"
+            >
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
           </div>
         </div>
       )}
