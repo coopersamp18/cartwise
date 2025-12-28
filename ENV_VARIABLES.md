@@ -33,17 +33,38 @@ OPENAI_API_KEY=sk-proj-...
 
 ### Polar Configuration (Subscriptions)
 
+You can configure both sandbox and production keys, then switch between them using the `POLAR_USE_SANDBOX` flag.
+
+**Production Keys (Required):**
 ```bash
-POLAR_API_KEY=polar_sk_...
-POLAR_WEBHOOK_SECRET=whsec_...
-NEXT_PUBLIC_POLAR_PRODUCT_ID=prod_...
+POLAR_API_KEY=polar_sk_production_key_here
+POLAR_WEBHOOK_SECRET=whsec_production_secret_here
+NEXT_PUBLIC_POLAR_PRODUCT_ID=prod_production_product_id_here
+```
+
+**Sandbox Keys (Optional - for testing):**
+```bash
+POLAR_SANDBOX_API_KEY=polar_sk_sandbox_key_here
+POLAR_SANDBOX_WEBHOOK_SECRET=whsec_sandbox_secret_here
+NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID=prod_sandbox_product_id_here
+```
+
+**Environment Switch:**
+```bash
+POLAR_USE_SANDBOX=true  # Set to "true" to use sandbox, "false" or omit for production
 ```
 
 **Where to find:**
-- Log in to Polar dashboard (polar.sh)
-- **API Key**: Settings → API Keys
-- **Webhook Secret**: Settings → Webhooks → Create endpoint
-- **Product ID**: Products → Your product → Copy ID
+- **For Sandbox/Testing**: Log in to Polar sandbox dashboard at [sandbox.polar.sh](https://sandbox.polar.sh)
+  - **API Key**: Settings → API Keys (in sandbox dashboard)
+  - **Webhook Secret**: Settings → Webhooks → Create endpoint (in sandbox dashboard)
+  - **Product ID**: Products → Your product → Copy ID (create a test product in sandbox)
+- **For Production**: Log in to Polar dashboard (polar.sh)
+  - **API Key**: Settings → API Keys
+  - **Webhook Secret**: Settings → Webhooks → Create endpoint
+  - **Product ID**: Products → Your product → Copy ID
+
+**Note**: You can keep both sets of keys in your `.env.local` file. Set `POLAR_USE_SANDBOX=true` to use sandbox, or set it to `false`/remove it to use production. The application will automatically use the correct API endpoint based on this setting.
 
 ## Setup Instructions
 
@@ -63,10 +84,16 @@ SUPABASE_SERVICE_ROLE_KEY=
 # OpenAI
 OPENAI_API_KEY=
 
-# Polar (Subscriptions)
+# Polar (Subscriptions - Production)
 POLAR_API_KEY=
 POLAR_WEBHOOK_SECRET=
 NEXT_PUBLIC_POLAR_PRODUCT_ID=
+
+# Polar (Subscriptions - Sandbox/Testing - Optional)
+POLAR_SANDBOX_API_KEY=
+POLAR_SANDBOX_WEBHOOK_SECRET=
+NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID=
+POLAR_USE_SANDBOX=true  # Set to "true" for sandbox, "false" or omit for production
 ```
 
 ## Security Notes

@@ -18,7 +18,13 @@ function verifyWebhookSignature(
 
 export async function POST(request: Request) {
   try {
-    const webhookSecret = process.env.POLAR_WEBHOOK_SECRET;
+    // Determine if we're using sandbox or production
+    const useSandbox = process.env.POLAR_USE_SANDBOX === "true";
+    
+    // Select appropriate webhook secret based on environment
+    const webhookSecret = useSandbox
+      ? process.env.POLAR_SANDBOX_WEBHOOK_SECRET || process.env.POLAR_WEBHOOK_SECRET
+      : process.env.POLAR_WEBHOOK_SECRET;
 
     if (!webhookSecret) {
       console.error("POLAR_WEBHOOK_SECRET not configured");
@@ -167,15 +173,38 @@ export async function POST(request: Request) {
       }
 
       case "subscription.updated": {
-        // When subscription details are updated
+        // When subscription details are updated (includes payment failures)
         const subscriptionId = event.data.id;
         const currentPeriodEnd = event.data.current_period_end;
-        const status = event.data.status;
+        const polarStatus = event.data.status;
+
+        // Map Polar statuses to our database statuses
+        let mappedStatus: string;
+        switch (polarStatus) {
+          case "active":
+            mappedStatus = "active";
+            break;
+          case "past_due":
+            mappedStatus = "past_due";
+            break;
+          case "unpaid":
+            mappedStatus = "unpaid";
+            break;
+          case "canceled":
+            mappedStatus = "canceled";
+            break;
+          case "trialing":
+            mappedStatus = "trial";
+            break;
+          default:
+            // For any other status, map to inactive
+            mappedStatus = "inactive";
+        }
 
         const { error } = await supabase
           .from("subscriptions")
           .update({
-            status: status === "active" ? "active" : "inactive",
+            status: mappedStatus,
             current_period_end: currentPeriodEnd,
             updated_at: new Date().toISOString(),
           })
@@ -184,7 +213,31 @@ export async function POST(request: Request) {
         if (error) {
           console.error("Error updating subscription:", error);
         } else {
-          console.log("Updated subscription:", subscriptionId);
+          console.log("Updated subscription:", {
+            subscriptionId,
+            polarStatus,
+            mappedStatus,
+          });
+        }
+        break;
+      }
+
+      case "subscription.revoked": {
+        // When subscription is immediately revoked (e.g., due to payment failure)
+        const subscriptionId = event.data.id;
+
+        const { error } = await supabase
+          .from("subscriptions")
+          .update({
+            status: "revoked",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("polar_subscription_id", subscriptionId);
+
+        if (error) {
+          console.error("Error updating subscription to revoked:", error);
+        } else {
+          console.log("Updated subscription to revoked:", subscriptionId);
         }
         break;
       }

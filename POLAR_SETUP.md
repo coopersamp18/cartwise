@@ -2,15 +2,25 @@
 
 This guide will help you set up Polar subscriptions for Cartwise.
 
-## Step 1: Create a Polar Account
+## Sandbox vs Production
 
-1. Go to [https://polar.sh](https://polar.sh)
-2. Sign up for a new account
+This application is currently configured to use **Polar's sandbox environment** for testing. The sandbox allows you to test the full subscription flow without processing real payments.
+
+- **Sandbox**: [https://sandbox.polar.sh](https://sandbox.polar.sh) - Use for testing
+- **Production**: [https://polar.sh](https://polar.sh) - Use for live payments
+
+**Test Card**: Use `4242 4242 4242 4242` with any future expiration date and any CVC for successful test payments.
+
+## Step 1: Create a Polar Sandbox Account
+
+1. Go to [https://sandbox.polar.sh](https://sandbox.polar.sh)
+2. Sign up for a new account (separate from production)
 3. Complete the onboarding process
+4. Create a new organization in the sandbox environment
 
-## Step 2: Create a Product
+## Step 2: Create a Product in Sandbox
 
-1. In your Polar dashboard, navigate to **Products**
+1. In your Polar sandbox dashboard, navigate to **Products**
 2. Click **Create Product**
 3. Set up your product with these details:
    - **Name**: Cartwise Subscription
@@ -19,12 +29,13 @@ This guide will help you set up Polar subscriptions for Cartwise.
    - **Trial Period**: 3 days
 4. Save the product and copy the **Product ID** (starts with `prod_`)
 
-## Step 3: Get Your API Keys
+## Step 3: Get Your Sandbox API Keys
 
-1. In Polar dashboard, go to **Settings** → **API Keys**
+1. In Polar sandbox dashboard, go to **Settings** → **API Keys**
 2. Create a new API key or use the existing one
 3. Copy your **Secret Key** (starts with `polar_sk_`)
-4. Copy your **Webhook Secret** (starts with `whsec_`)
+4. Go to **Settings** → **Webhooks**
+5. Create a webhook endpoint (see Step 5 below) and copy the **Webhook Secret** (starts with `whsec_`)
 
 ## Step 4: Configure Environment Variables
 
@@ -37,9 +48,9 @@ POLAR_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 NEXT_PUBLIC_POLAR_PRODUCT_ID=prod_your_product_id_here
 ```
 
-## Step 5: Set Up Webhooks
+## Step 5: Set Up Webhooks in Sandbox
 
-1. In Polar dashboard, go to **Settings** → **Webhooks**
+1. In Polar sandbox dashboard, go to **Settings** → **Webhooks**
 2. Click **Add Endpoint**
 3. Enter your webhook URL:
    - **Development**: `https://your-ngrok-url.ngrok.io/api/polar/webhook`
@@ -49,7 +60,9 @@ NEXT_PUBLIC_POLAR_PRODUCT_ID=prod_your_product_id_here
    - `subscription.active`
    - `subscription.canceled`
    - `subscription.updated`
+   - `subscription.revoked`
 5. Save the webhook endpoint
+6. Copy the **Webhook Secret** (starts with `whsec_`) - you'll need this for Step 3
 
 ## Step 6: Update Database Schema
 

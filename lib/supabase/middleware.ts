@@ -70,6 +70,7 @@ export async function updateSession(request: NextRequest) {
     }
 
     // Check if subscription is active or trial is valid
+    // Payment failure statuses (past_due, unpaid, revoked) should block access
     const now = new Date();
     const isTrialActive =
       subscription.status === "trial" &&
@@ -81,8 +82,17 @@ export async function updateSession(request: NextRequest) {
       subscription.current_period_end &&
       new Date(subscription.current_period_end) > now;
 
-    if (!isTrialActive && !isSubscriptionActive) {
-      // Subscription expired - redirect to subscribe page
+    // Block access for payment failure statuses
+    const isPaymentFailed =
+      subscription.status === "past_due" ||
+      subscription.status === "unpaid" ||
+      subscription.status === "revoked" ||
+      subscription.status === "canceled" ||
+      subscription.status === "expired" ||
+      subscription.status === "inactive";
+
+    if (isPaymentFailed || (!isTrialActive && !isSubscriptionActive)) {
+      // Subscription expired or payment failed - redirect to subscribe page
       const url = request.nextUrl.clone();
       url.pathname = "/auth/subscribe";
       return NextResponse.redirect(url);

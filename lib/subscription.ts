@@ -39,9 +39,22 @@ export async function hasActiveSubscription(
 
 /**
  * Check if a subscription is active (including trial period)
+ * Payment failure statuses (past_due, unpaid, revoked) are not considered active
  */
 export function isSubscriptionActive(subscription: Subscription): boolean {
   const now = new Date();
+
+  // Payment failure statuses are not active
+  if (
+    subscription.status === "past_due" ||
+    subscription.status === "unpaid" ||
+    subscription.status === "revoked" ||
+    subscription.status === "canceled" ||
+    subscription.status === "expired" ||
+    subscription.status === "inactive"
+  ) {
+    return false;
+  }
 
   // Check if trial is active
   if (

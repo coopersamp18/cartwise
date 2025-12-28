@@ -43,12 +43,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate environment variables
-    const polarApiKey = process.env.POLAR_API_KEY;
-    const productId = process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID;
+    // Determine if we're using sandbox or production
+    const useSandbox = process.env.POLAR_USE_SANDBOX === "true";
+    
+    // Select appropriate credentials based on environment
+    const polarApiKey = useSandbox 
+      ? process.env.POLAR_SANDBOX_API_KEY || process.env.POLAR_API_KEY
+      : process.env.POLAR_API_KEY;
+    const productId = useSandbox
+      ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID || process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID
+      : process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID;
+    const apiBaseUrl = useSandbox
+      ? "https://sandbox-api.polar.sh"
+      : "https://api.polar.sh";
 
     if (!polarApiKey || !productId) {
-      console.error("Missing Polar configuration");
+      console.error("Missing Polar configuration", { useSandbox, hasApiKey: !!polarApiKey, hasProductId: !!productId });
       return NextResponse.json(
         { error: "Payment system not configured" },
         { status: 500 }
@@ -78,17 +88,19 @@ export async function POST(request: Request) {
     // checkoutPayload.customer_email = email;
 
     console.log("Creating Polar checkout with:", {
+      environment: useSandbox ? "sandbox" : "production",
       productId,
       email,
       successUrl,
       returnUrl,
+      apiBaseUrl,
       hasApiKey: !!polarApiKey,
     });
 
     // Create checkout session with Polar API
-    // Endpoint: https://api.polar.sh/v1/checkouts/ (not /checkouts/custom)
+    // Endpoint varies based on POLAR_USE_SANDBOX environment variable
     const checkoutResponse = await fetch(
-      "https://api.polar.sh/v1/checkouts/",
+      `${apiBaseUrl}/v1/checkouts/`,
       {
         method: "POST",
         headers: {
