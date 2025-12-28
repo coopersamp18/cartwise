@@ -1,62 +1,62 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import crypto from "crypto";
+import { validateEvent, WebhookVerificationError } from "@polar-sh/sdk/webhooks";
+import { getPolarWebhookSecret, isPolarSandbox } from "@/lib/polar";
 
-// Verify webhook signature from Polar
-function verifyWebhookSignature(
-  payload: string,
-  signature: string,
-  secret: string
-): boolean {
-  const hmac = crypto.createHmac("sha256", secret);
-  const digest = hmac.update(payload).digest("hex");
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(digest)
-  );
-}
+// Prevent Next.js from parsing the body
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    // Determine if we're using sandbox or production
-    const useSandbox = process.env.POLAR_USE_SANDBOX === "true";
-    
-    // Select appropriate webhook secret based on environment
-    const webhookSecret = useSandbox
-      ? process.env.POLAR_SANDBOX_WEBHOOK_SECRET || process.env.POLAR_WEBHOOK_SECRET
-      : process.env.POLAR_WEBHOOK_SECRET;
-
-    if (!webhookSecret) {
-      console.error("POLAR_WEBHOOK_SECRET not configured");
+    // Get webhook secret for current environment
+    let webhookSecret: string;
+    try {
+      webhookSecret = getPolarWebhookSecret();
+    } catch (error) {
+      console.error("Webhook secret not configured:", error);
       return NextResponse.json(
         { error: "Webhook not configured" },
         { status: 500 }
       );
     }
 
+    console.log("Webhook environment:", {
+      useSandbox: isPolarSandbox(),
+      hasSecret: !!webhookSecret,
+    });
+
     // Get the raw body for signature verification
     const body = await request.text();
-    const signature = request.headers.get("x-polar-signature");
 
-    if (!signature) {
-      console.error("Missing webhook signature");
-      return NextResponse.json(
-        { error: "Missing signature" },
-        { status: 401 }
-      );
+    // Convert Headers to plain object for SDK
+    const headers: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    console.log("Webhook headers received:", {
+      hasSignature: !!headers["webhook-signature"],
+      hasTimestamp: !!headers["webhook-timestamp"],
+      hasWebhookId: !!headers["webhook-id"],
+      bodyLength: body.length,
+    });
+
+    // Verify webhook signature using Polar SDK
+    let event: any;
+    try {
+      event = validateEvent(body, headers, webhookSecret);
+      console.log("Webhook signature verified successfully");
+    } catch (error) {
+      if (error instanceof WebhookVerificationError) {
+        console.error("Invalid webhook signature:", error.message);
+        return NextResponse.json(
+          { error: "Invalid signature" },
+          { status: 403 }
+        );
+      }
+      throw error;
     }
 
-    // Verify the webhook signature
-    if (!verifyWebhookSignature(body, signature, webhookSecret)) {
-      console.error("Invalid webhook signature");
-      return NextResponse.json(
-        { error: "Invalid signature" },
-        { status: 401 }
-      );
-    }
-
-    // Parse the webhook event
-    const event = JSON.parse(body);
     const eventType = event.type;
 
     console.log("Received Polar webhook:", {

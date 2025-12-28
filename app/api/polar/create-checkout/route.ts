@@ -1,6 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getSubscription, hasActiveSubscription } from "@/lib/subscription";
+import {
+  createPolarClient,
+  getPolarProductId,
+  isPolarSandbox,
+} from "@/lib/polar";
 
 export async function POST(request: Request) {
   try {
@@ -22,9 +27,9 @@ export async function POST(request: Request) {
       const hasActive = await hasActiveSubscription(user.id);
       if (hasActive) {
         return NextResponse.json(
-          { 
+          {
             error: "You already have an active subscription",
-            hasSubscription: true 
+            hasSubscription: true,
           },
           { status: 400 }
         );
@@ -43,22 +48,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Determine if we're using sandbox or production
-    const useSandbox = process.env.POLAR_USE_SANDBOX === "true";
-    
-    // Select appropriate credentials based on environment
-    const polarApiKey = useSandbox 
-      ? process.env.POLAR_SANDBOX_API_KEY || process.env.POLAR_API_KEY
-      : process.env.POLAR_API_KEY;
-    const productId = useSandbox
-      ? process.env.NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID || process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID
-      : process.env.NEXT_PUBLIC_POLAR_PRODUCT_ID;
-    const apiBaseUrl = useSandbox
-      ? "https://sandbox-api.polar.sh"
-      : "https://api.polar.sh";
-
-    if (!polarApiKey || !productId) {
-      console.error("Missing Polar configuration", { useSandbox, hasApiKey: !!polarApiKey, hasProductId: !!productId });
+    // Initialize Polar SDK client
+    let polar;
+    let productId;
+    try {
+      polar = createPolarClient();
+      productId = getPolarProductId();
+    } catch (error) {
+      console.error("Polar configuration error:", error);
       return NextResponse.json(
         { error: "Payment system not configured" },
         { status: 500 }
@@ -66,106 +63,74 @@ export async function POST(request: Request) {
     }
 
     // Get the origin for success/cancel URLs
-    const origin = request.headers.get("origin") || request.headers.get("referer")?.split("/").slice(0, 3).join("/") || "http://localhost:3000";
+    const origin =
+      request.headers.get("origin") ||
+      request.headers.get("referer")?.split("/").slice(0, 3).join("/") ||
+      "http://localhost:3000";
     const successUrl = `${origin}/auth/subscribe/success`;
     const returnUrl = `${origin}/auth/subscribe`;
 
-    // Prepare checkout payload according to Polar API documentation
-    // See: https://polar.sh/docs/api-reference/checkouts/create-session
-    // Note: We're NOT including customer_email to prevent Polar from auto-populating
-    // with old email addresses. The user will enter their email fresh in the checkout.
-    const checkoutPayload: any = {
-      products: [productId], // Products should be an array
-      success_url: successUrl,
-      return_url: returnUrl, // Required by Polar API
-      metadata: {
-        user_id: user.id,
-        user_email: email, // Store email in metadata for webhook processing
-      },
-    };
-
-    // Only include customer_email if we want to pre-fill (commented out to avoid old email issue)
-    // checkoutPayload.customer_email = email;
-
     console.log("Creating Polar checkout with:", {
-      environment: useSandbox ? "sandbox" : "production",
+      environment: isPolarSandbox() ? "sandbox" : "production",
       productId,
       email,
       successUrl,
       returnUrl,
-      apiBaseUrl,
-      hasApiKey: !!polarApiKey,
     });
 
-    // Create checkout session with Polar API
-    // Endpoint varies based on POLAR_USE_SANDBOX environment variable
-    const checkoutResponse = await fetch(
-      `${apiBaseUrl}/v1/checkouts/`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${polarApiKey}`,
+    // Create checkout session using Polar SDK
+    try {
+      const checkout = await polar.checkouts.create({
+        products: [productId],
+        successUrl: successUrl,
+        // Note: We're NOT including customerEmail to prevent Polar from auto-populating
+        // with old email addresses. The user will enter their email fresh in the checkout.
+        metadata: {
+          user_id: user.id,
+          user_email: email, // Store email in metadata for webhook processing
         },
-        body: JSON.stringify(checkoutPayload),
-      }
-    );
-
-    if (!checkoutResponse.ok) {
-      let errorData: any = {};
-      const responseText = await checkoutResponse.text();
-      
-      try {
-        errorData = JSON.parse(responseText);
-      } catch {
-        // If response is not JSON, use the text as error message
-        errorData = { message: responseText || "Unknown error" };
-      }
-      
-      console.error("Polar API error:", {
-        status: checkoutResponse.status,
-        statusText: checkoutResponse.statusText,
-        errorData,
-        productId,
-        origin,
       });
-      
-      // Provide more specific error message
+
+      return NextResponse.json({
+        checkoutUrl: checkout.url,
+        checkoutId: checkout.id,
+      });
+    } catch (error: any) {
+      console.error("Polar API error:", {
+        error: error.message,
+        statusCode: error.statusCode,
+        body: error.body,
+      });
+
+      // Provide more specific error message based on error type
       let errorMessage = "Failed to create checkout session";
-      if (errorData.message) {
-        errorMessage = errorData.message;
-      } else if (errorData.error) {
-        errorMessage = errorData.error;
-      } else if (checkoutResponse.status === 401) {
+      
+      if (error.statusCode === 401) {
         errorMessage = "Invalid API credentials. Please contact support.";
-      } else if (checkoutResponse.status === 404) {
+      } else if (error.statusCode === 404) {
         errorMessage = "Product not found. Please contact support.";
-      } else if (checkoutResponse.status === 400) {
-        // Check for "already has subscription" type errors
-        const errorLower = (errorData.message || "").toLowerCase();
+      } else if (error.statusCode === 400) {
+        const errorBody = error.body || error.message || "";
+        const errorLower = errorBody.toLowerCase();
         if (
           errorLower.includes("already") ||
           errorLower.includes("subscription") ||
           errorLower.includes("existing")
         ) {
-          errorMessage = "This email already has a subscription. Please use a different email or contact support.";
+          errorMessage =
+            "This email already has a subscription. Please use a different email or contact support.";
         } else {
-          errorMessage = errorData.message || "Invalid request. Please check your configuration.";
+          errorMessage = error.message || "Invalid request. Please check your configuration.";
         }
+      } else if (error.message) {
+        errorMessage = error.message;
       }
-      
+
       return NextResponse.json(
         { error: errorMessage },
-        { status: checkoutResponse.status || 500 }
+        { status: error.statusCode || 500 }
       );
     }
-
-    const checkoutData = await checkoutResponse.json();
-
-    return NextResponse.json({
-      checkoutUrl: checkoutData.url,
-      checkoutId: checkoutData.id,
-    });
   } catch (error) {
     console.error("Error creating checkout:", error);
     return NextResponse.json(

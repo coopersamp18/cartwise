@@ -46,7 +46,17 @@ Add these variables to your `.env.local` file:
 POLAR_API_KEY=polar_sk_your_secret_key_here
 POLAR_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 NEXT_PUBLIC_POLAR_PRODUCT_ID=prod_your_product_id_here
+
+# Set to "true" to use sandbox environment, "false" or omit for production
+POLAR_USE_SANDBOX=true
+
+# Optional: Separate sandbox credentials (if different from production)
+POLAR_SANDBOX_API_KEY=polar_sk_sandbox_key_here
+POLAR_SANDBOX_WEBHOOK_SECRET=whsec_sandbox_secret_here
+NEXT_PUBLIC_POLAR_SANDBOX_PRODUCT_ID=prod_sandbox_id_here
 ```
+
+**Note**: The application now uses the official Polar SDK (`@polar-sh/sdk`) for type-safe API interactions and built-in webhook verification.
 
 ## Step 5: Set Up Webhooks in Sandbox
 
@@ -105,6 +115,40 @@ When you're ready to deploy to production:
 3. Test the full flow in production
 4. Monitor webhook deliveries in the Polar dashboard
 
+## Technical Implementation
+
+### Polar SDK Integration
+
+The application uses the official Polar SDK for all API interactions:
+
+**Client Initialization** (`lib/polar.ts`):
+```typescript
+import { Polar } from "@polar-sh/sdk";
+
+const polar = new Polar({
+  accessToken: process.env.POLAR_API_KEY,
+  server: "sandbox", // or "production"
+});
+```
+
+**Checkout Creation** (`app/api/polar/create-checkout/route.ts`):
+- Uses `polar.checkouts.create()` for type-safe checkout session creation
+- Automatically handles environment switching (sandbox/production)
+- Includes proper error handling with typed error objects
+
+**Webhook Verification** (`app/api/polar/webhook/route.ts`):
+- Uses `validateEvent()` from `@polar-sh/sdk/webhooks`
+- Automatically verifies webhook signatures using Svix format
+- Throws `WebhookVerificationError` for invalid signatures
+
+### Benefits of SDK Integration
+
+- ✅ **Type Safety**: Full TypeScript support with autocomplete
+- ✅ **Cleaner Code**: Less boilerplate compared to manual fetch calls
+- ✅ **Built-in Verification**: Secure webhook signature validation
+- ✅ **Error Handling**: Typed error objects for better debugging
+- ✅ **Environment Switching**: Easy toggle between sandbox and production
+
 ## Troubleshooting
 
 ### Webhook Not Receiving Events
@@ -113,6 +157,7 @@ When you're ready to deploy to production:
 - Check that the webhook secret matches your environment variable
 - Review webhook delivery logs in Polar dashboard
 - Check your application logs for any errors
+- Ensure you're using the correct secret for your environment (sandbox vs production)
 
 ### Subscription Not Created
 
@@ -120,6 +165,7 @@ When you're ready to deploy to production:
 - Verify the `user_id` is being passed in the checkout metadata
 - Check your Supabase logs for any RLS policy issues
 - Ensure the `subscriptions` table exists and has proper permissions
+- Verify webhook signature is being validated correctly
 
 ### Users Can't Access Dashboard
 
@@ -127,6 +173,13 @@ When you're ready to deploy to production:
 - Check that the subscription status is either "trial" or "active"
 - Verify the trial_ends_at or current_period_end dates are in the future
 - Check middleware logs for any errors
+
+### SDK-Related Issues
+
+- Ensure `@polar-sh/sdk` is installed: `npm install @polar-sh/sdk`
+- Verify `POLAR_USE_SANDBOX` environment variable is set correctly
+- Check that API keys match the environment (sandbox keys for sandbox, production keys for production)
+- Review TypeScript errors for type mismatches in SDK calls
 
 ## Support
 
@@ -167,14 +220,17 @@ User Can Access Dashboard
 
 ✅ Database schema with subscriptions table
 ✅ Subscription utility functions
-✅ Polar checkout API endpoint
-✅ Webhook handler for Polar events
+✅ Polar SDK integration (`@polar-sh/sdk`)
+✅ Type-safe Polar client utility (`lib/polar.ts`)
+✅ Polar checkout API endpoint (using SDK)
+✅ Webhook handler with SDK verification
 ✅ Subscription signup page
 ✅ Success page with status checking
 ✅ Auth callback with subscription check
 ✅ Middleware protection for routes
 ✅ Trial banner on dashboard
 ✅ Automatic redirect for non-subscribers
+✅ Sandbox/production environment switching
 
 ## Next Steps (Optional Enhancements)
 
