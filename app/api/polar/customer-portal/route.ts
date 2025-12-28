@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getSubscription } from "@/lib/subscription";
-import { createPolarClient, isPolarSandbox, getPolarOrgSlug } from "@/lib/polar";
+import { createPolarClient } from "@/lib/polar";
 
 export async function GET(request: Request) {
   try {
@@ -39,30 +39,19 @@ export async function GET(request: Request) {
       );
     }
 
-    // Generate customer portal link using organization slug
+    // Generate pre-authenticated customer portal link using Polar SDK
     try {
-      const baseUrl = isPolarSandbox()
-        ? "https://sandbox.polar.sh"
-        : "https://polar.sh";
-      
-      // Get organization slug from environment
-      let orgSlug: string;
-      try {
-        orgSlug = getPolarOrgSlug();
-      } catch (error: any) {
-        console.error("[customer-portal] Missing organization slug:", error.message);
-        return NextResponse.json(
-          { 
-            error: error.message || "Organization slug not configured. Please set POLAR_ORG_SLUG or POLAR_SANDBOX_ORG_SLUG in your environment variables."
-          },
-          { status: 500 }
-        );
-      }
-      
-      // Polar customer portal URL format: https://{baseUrl}/{orgSlug}/portal
-      const portalUrl = `${baseUrl}/${orgSlug}/portal`;
+      // Create a customer session to get an authenticated portal URL
+      const session = await polar.customerSessions.create({
+        customerId: subscription.polar_customer_id,
+      });
 
-      console.log("[customer-portal] Generated portal URL:", portalUrl);
+      const portalUrl = session.customerPortalUrl;
+
+      console.log("[customer-portal] Generated authenticated portal URL:", {
+        customerId: subscription.polar_customer_id,
+        portalUrl,
+      });
 
       return NextResponse.json({
         portalUrl,

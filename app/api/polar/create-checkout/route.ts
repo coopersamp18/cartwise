@@ -21,19 +21,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check if user already has an active subscription
+    // Check if user has ever had a subscription (prevents multiple free trials)
     const existingSubscription = await getSubscription(user.id);
     if (existingSubscription) {
-      const hasActive = await hasActiveSubscription(user.id);
-      if (hasActive) {
-        return NextResponse.json(
-          {
-            error: "You already have an active subscription",
-            hasSubscription: true,
-          },
-          { status: 400 }
-        );
-      }
+      // User has already used their free trial - prevent creating a new checkout
+      return NextResponse.json(
+        {
+          error: "You have already used your free trial. Please reactivate your existing subscription from the subscription settings page.",
+          hasSubscription: true,
+        },
+        { status: 400 }
+      );
     }
 
     // Get request body

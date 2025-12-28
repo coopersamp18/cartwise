@@ -11,7 +11,7 @@ import {
   isSubscriptionActive, 
   getTrialDaysRemaining 
 } from "@/lib/subscription-client";
-import { ChefHat, ArrowLeft, CreditCard, Calendar, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { ChefHat, ArrowLeft, CreditCard, Calendar, AlertCircle, CheckCircle, XCircle, ExternalLink, Loader2 } from "lucide-react";
 
 export default function SubscriptionPage() {
   const [user, setUser] = useState<{ id: string; email?: string | null } | null>(null);
@@ -20,6 +20,9 @@ export default function SubscriptionPage() {
   const [isCanceling, setIsCanceling] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [billingInfo, setBillingInfo] = useState<any>(null);
+  const [isLoadingBilling, setIsLoadingBilling] = useState(false);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -35,6 +38,11 @@ export default function SubscriptionPage() {
         setUser(authUser);
         const sub = await getSubscriptionClient(authUser.id);
         setSubscription(sub);
+        
+        // Load billing information if subscription exists
+        if (sub) {
+          loadBillingInfo();
+        }
       } catch (error) {
         console.error("Error loading subscription:", error);
         setError("Failed to load subscription data");
@@ -43,8 +51,44 @@ export default function SubscriptionPage() {
       }
     };
 
+    const loadBillingInfo = async () => {
+      setIsLoadingBilling(true);
+      try {
+        const response = await fetch("/api/polar/billing-info");
+        if (response.ok) {
+          const data = await response.json();
+          setBillingInfo(data.billingInfo);
+        } else {
+          console.error("Failed to load billing information");
+        }
+      } catch (error) {
+        console.error("Error loading billing information:", error);
+      } finally {
+        setIsLoadingBilling(false);
+      }
+    };
+
     loadData();
   }, [supabase, router]);
+
+  const handleOpenCustomerPortal = async () => {
+    setIsOpeningPortal(true);
+    try {
+      const response = await fetch("/api/polar/customer-portal");
+      const data = await response.json();
+      
+      if (response.ok && data.portalUrl) {
+        window.location.href = data.portalUrl;
+      } else {
+        setError(data.error || "Failed to open customer portal");
+      }
+    } catch (error) {
+      console.error("Error opening customer portal:", error);
+      setError("Failed to open customer portal. Please try again.");
+    } finally {
+      setIsOpeningPortal(false);
+    }
+  };
 
   const handleCancel = async () => {
     if (!subscription) return;
@@ -276,12 +320,42 @@ export default function SubscriptionPage() {
             {/* Billing Information */}
             <Card>
               <CardHeader>
-                <h2 className="font-serif text-xl font-bold">Billing Information</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="font-serif text-xl font-bold">Billing Information</h2>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleOpenCustomerPortal}
+                    disabled={isOpeningPortal}
+                  >
+                    {isOpeningPortal ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Opening...
+                      </>
+                    ) : (
+                      <>
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Update Billing
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Email</span>
-                  <span className="font-medium">{user?.email || "N/A"}</span>
+                  <span className="font-medium">{billingInfo?.email || user?.email || "N/A"}</span>
+                </div>
+                {billingInfo?.name && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Name</span>
+                    <span className="font-medium">{billingInfo.name}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Customer ID</span>
+                  <span className="font-mono text-xs">{subscription.polar_customer_id || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Subscription ID</span>
@@ -292,6 +366,16 @@ export default function SubscriptionPage() {
                   <span className="font-medium">
                     {new Date(subscription.created_at).toLocaleDateString()}
                   </span>
+                </div>
+                {isLoadingBilling && (
+                  <div className="flex items-center justify-center py-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+                <div className="pt-3 border-t border-border">
+                  <p className="text-xs text-muted-foreground">
+                    Use the "Update Billing" button above to manage your payment method, billing address, and view billing history in the secure customer portal.
+                  </p>
                 </div>
               </CardContent>
             </Card>

@@ -69,33 +69,58 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Check if subscription is active or trial is valid
-    // Payment failure statuses (past_due, unpaid, revoked) should block access
+    // Check if user has access (including canceled subscriptions until period ends)
     const now = new Date();
-    const isTrialActive =
-      subscription.status === "trial" &&
-      subscription.trial_ends_at &&
-      new Date(subscription.trial_ends_at) > now;
-
-    const isSubscriptionActive =
-      subscription.status === "active" &&
-      subscription.current_period_end &&
-      new Date(subscription.current_period_end) > now;
-
-    // Block access for payment failure statuses
+    
+    // Payment failure statuses that should immediately block access
     const isPaymentFailed =
       subscription.status === "past_due" ||
       subscription.status === "unpaid" ||
       subscription.status === "revoked" ||
-      subscription.status === "canceled" ||
       subscription.status === "expired" ||
       subscription.status === "inactive";
 
-    if (isPaymentFailed || (!isTrialActive && !isSubscriptionActive)) {
-      // Subscription expired or payment failed - redirect to subscribe page
+    if (isPaymentFailed) {
+      // Payment failed - redirect to subscribe page
       const url = request.nextUrl.clone();
       url.pathname = "/auth/subscribe";
       return NextResponse.redirect(url);
+    }
+
+    // For canceled subscriptions, check if period hasn't ended yet
+    if (subscription.status === "canceled") {
+      const hasTrialAccess =
+        subscription.trial_ends_at &&
+        new Date(subscription.trial_ends_at) > now;
+      const hasPeriodAccess =
+        subscription.current_period_end &&
+        new Date(subscription.current_period_end) > now;
+
+      if (!hasTrialAccess && !hasPeriodAccess) {
+        // Canceled and period has ended - redirect to subscribe page
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/subscribe";
+        return NextResponse.redirect(url);
+      }
+      // Canceled but period hasn't ended - allow access
+    } else {
+      // For non-canceled subscriptions, check if active or trial is valid
+      const isTrialActive =
+        subscription.status === "trial" &&
+        subscription.trial_ends_at &&
+        new Date(subscription.trial_ends_at) > now;
+
+      const isSubscriptionActive =
+        subscription.status === "active" &&
+        subscription.current_period_end &&
+        new Date(subscription.current_period_end) > now;
+
+      if (!isTrialActive && !isSubscriptionActive) {
+        // Subscription expired - redirect to subscribe page
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/subscribe";
+        return NextResponse.redirect(url);
+      }
     }
   }
 

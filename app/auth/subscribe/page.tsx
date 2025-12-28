@@ -74,9 +74,9 @@ export default function SubscribePage() {
 
       if (!response.ok) {
         // Check if user already has a subscription
-        if (data?.hasSubscription || data?.error?.includes("already have")) {
-          // Redirect to dashboard if they already have a subscription
-          router.push("/dashboard");
+        if (data?.hasSubscription || data?.error?.includes("already have") || data?.error?.includes("already used")) {
+          // Redirect to subscription settings if they already have a subscription
+          router.push("/dashboard/subscription");
           return;
         }
         
