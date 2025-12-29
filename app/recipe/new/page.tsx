@@ -335,9 +335,15 @@ export default function NewRecipePage() {
                       placeholder="https://example.com/recipe/..."
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && url.trim() && !isExtracting) {
+                          e.preventDefault();
+                          handleExtract();
+                        }
+                      }}
                     />
                     <p className="text-sm text-muted-foreground">
-                      Paste a link to any recipe page and we&apos;ll extract the ingredients and instructions.
+                      Paste a link to any recipe page and we&apos;ll extract the ingredients and instructions. Press Enter to extract.
                     </p>
                   </div>
                 ) : (

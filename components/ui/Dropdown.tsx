@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, ReactNode, HTMLAttributes } from "react";
+import { createPortal } from "react-dom";
 
 interface DropdownProps extends HTMLAttributes<HTMLDivElement> {
   trigger: ReactNode;
@@ -19,10 +20,15 @@ export function Dropdown({
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isHoverable, setIsHoverable] = useState(false);
-  const [position, setPosition] = useState<{ top: number; left?: number; right?: number } | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ showAbove: boolean; triggerTop: number; triggerBottom: number; left?: number; right?: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Detect if device supports hover
   useEffect(() => {
@@ -41,9 +47,18 @@ export function Dropdown({
   useEffect(() => {
     if (isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      
+      // Show above if not enough space below (use 200px as threshold)
+      const showAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
+      
       setPosition({
-        top: rect.bottom + 8,
-        ...(align === 'left' ? { left: rect.left } : { right: window.innerWidth - rect.right }),
+        showAbove,
+        triggerTop: rect.top,
+        triggerBottom: rect.bottom,
+        left: align === 'left' ? rect.left : undefined,
+        right: align === 'left' ? undefined : window.innerWidth - rect.right,
       });
     } else {
       setPosition(null);
@@ -53,12 +68,11 @@ export function Dropdown({
   // Handle click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        triggerRef.current &&
-        !dropdownRef.current.contains(event.target as Node) &&
-        !triggerRef.current.contains(event.target as Node)
-      ) {
+      const target = event.target as Node;
+      const isInsideTrigger = triggerRef.current?.contains(target);
+      const isInsideDropdown = dropdownRef.current?.contains(target);
+      
+      if (!isInsideTrigger && !isInsideDropdown) {
         setIsOpen(false);
       }
     };
@@ -89,36 +103,56 @@ export function Dropdown({
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
 
-  const handleMouseEnter = () => {
-    if (isHoverable) {
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
       }
+    };
+  }, []);
+
+  const clearCloseTimeout = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const startCloseTimeout = () => {
+    clearCloseTimeout();
+    timeoutRef.current = setTimeout(() => {
+      setIsOpen(false);
+    }, 300); // Longer delay for easier navigation
+  };
+
+  const handleTriggerMouseEnter = () => {
+    if (isHoverable) {
+      clearCloseTimeout();
       setIsOpen(true);
     }
   };
 
-  const handleMouseLeave = () => {
+  const handleTriggerMouseLeave = () => {
     if (isHoverable) {
-      timeoutRef.current = setTimeout(() => {
-        setIsOpen(false);
-      }, 150); // Small delay to allow moving to dropdown
+      startCloseTimeout();
+    }
+  };
+
+  const handleDropdownMouseEnter = () => {
+    if (isHoverable) {
+      clearCloseTimeout();
+    }
+  };
+
+  const handleDropdownMouseLeave = () => {
+    if (isHoverable) {
+      startCloseTimeout();
     }
   };
 
   const handleClick = () => {
-    if (!isHoverable) {
-      setIsOpen((prev) => !prev);
-    } else {
-      // On desktop with hover, click closes it
-      setIsOpen(false);
-    }
-  };
-
-  const alignClasses = {
-    left: "left-0",
-    right: "right-0",
+    setIsOpen((prev) => !prev);
   };
 
   return (
@@ -126,28 +160,38 @@ export function Dropdown({
       <div
         ref={triggerRef}
         className={`relative inline-block ${className}`}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onMouseEnter={handleTriggerMouseEnter}
+        onMouseLeave={handleTriggerMouseLeave}
         {...props}
       >
-        <div onClick={handleClick} className="cursor-pointer">
+        <button 
+          type="button"
+          onClick={handleClick} 
+          className="cursor-pointer bg-transparent border-none p-0"
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+        >
           {trigger}
-        </div>
+        </button>
       </div>
-      {isOpen && position && (
+      {mounted && isOpen && position && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[100] min-w-[200px] bg-card border border-border rounded-xl shadow-lg overflow-hidden"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
+          className="fixed z-[9999] min-w-[200px] bg-card border border-border rounded-xl shadow-lg overflow-hidden"
+          onMouseEnter={handleDropdownMouseEnter}
+          onMouseLeave={handleDropdownMouseLeave}
           style={{
-            top: `${position.top}px`,
+            ...(position.showAbove 
+              ? { bottom: `${window.innerHeight - position.triggerTop}px` }
+              : { top: `${position.triggerBottom}px` }
+            ),
             ...(position.left !== undefined ? { left: `${position.left}px` } : {}),
             ...(position.right !== undefined ? { right: `${position.right}px` } : {}),
           }}
         >
           {children}
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

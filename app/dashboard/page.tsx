@@ -24,7 +24,11 @@ import {
   X,
   Star,
   Archive,
-  ArchiveRestore
+  ArchiveRestore,
+  Flame,
+  Beef,
+  Wheat,
+  Droplet
 } from "lucide-react";
 
 const AISLE_ORDER = [
@@ -373,27 +377,25 @@ export default function DashboardPage() {
       )}
 
       {/* Main Content */}
-      <main className="flex flex-1 min-h-0">
+      <main className="flex flex-1 min-h-0 h-full">
         {/* Filters Sidebar */}
-        <div className="flex-shrink-0">
-          <RecipeFiltersComponent
-            tags={tags}
-            filters={filters}
-            onFiltersChange={setFilters}
-            isOpen={filtersOpen}
-            onToggle={() => setFiltersOpen(!filtersOpen)}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            showFavorites={showFavorites}
-            onToggleFavorites={() => setShowFavorites(!showFavorites)}
-            showArchived={showArchived}
-            onToggleArchived={() => {
-              console.log('Toggling showArchived from', showArchived, 'to', !showArchived);
-              setShowArchived(!showArchived);
-            }}
-            shoppingListCount={shoppingList.filter((i) => !i.checked).length}
-          />
-        </div>
+        <RecipeFiltersComponent
+          tags={tags}
+          filters={filters}
+          onFiltersChange={setFilters}
+          isOpen={filtersOpen}
+          onToggle={() => setFiltersOpen(!filtersOpen)}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          showFavorites={showFavorites}
+          onToggleFavorites={() => setShowFavorites(!showFavorites)}
+          showArchived={showArchived}
+          onToggleArchived={() => {
+            console.log('Toggling showArchived from', showArchived, 'to', !showArchived);
+            setShowArchived(!showArchived);
+          }}
+          shoppingListCount={shoppingList.filter((i) => !i.checked).length}
+        />
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto">
@@ -520,31 +522,78 @@ export default function DashboardPage() {
                       </div>
 
                       <Link href={`/recipe/${recipe.id}`} className="flex-1 flex flex-col gap-3 min-h-0">
-                        <h3 className="font-serif text-lg font-bold">
-                          {recipe.title}
-                        </h3>
-                        {recipe.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {recipe.description}
-                          </p>
-                        )}
-                        <div className="mt-auto flex items-center justify-between gap-4 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-4">
-                            {recipe.prep_time && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-4 h-4" />
-                                {recipe.prep_time}
-                              </span>
-                            )}
-                            {recipe.servings && (
-                              <span className="flex items-center gap-1">
-                                <Users className="w-4 h-4" />
-                                {recipe.servings}
-                              </span>
-                            )}
-                          </div>
-                          {/* Archive/Delete button */}
-                          {showArchived ? (
+                        <div className="flex-1 flex flex-col gap-3">
+                          <h3 className="font-serif text-lg font-bold">
+                            {recipe.title}
+                          </h3>
+                          {recipe.description && (
+                            <p className="text-sm text-muted-foreground line-clamp-2">
+                              {recipe.description}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Bottom Section - Macros, Time, Servings */}
+                        <div className="mt-auto space-y-3">
+                          {/* Macros Section */}
+                          {(recipe.calories !== null || recipe.protein_g !== null || recipe.carbs_g !== null || recipe.fat_g !== null) && (
+                            <div className="flex items-center justify-around gap-2 py-2.5 border-y border-border">
+                              {recipe.calories !== null && (
+                                <div className="flex flex-col items-center gap-1 flex-1">
+                                  <Flame className="w-4 h-4 text-orange-500" />
+                                  <span className="text-xs font-semibold text-foreground">
+                                    {Math.round(recipe.calories)}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground leading-none">cal</span>
+                                </div>
+                              )}
+                              {recipe.protein_g !== null && (
+                                <div className="flex flex-col items-center gap-1 flex-1">
+                                  <Beef className="w-4 h-4 text-red-500" />
+                                  <span className="text-xs font-semibold text-foreground">
+                                    {Math.round(recipe.protein_g)}g
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground leading-none">protein</span>
+                                </div>
+                              )}
+                              {recipe.carbs_g !== null && (
+                                <div className="flex flex-col items-center gap-1 flex-1">
+                                  <Wheat className="w-4 h-4 text-amber-500" />
+                                  <span className="text-xs font-semibold text-foreground">
+                                    {Math.round(recipe.carbs_g)}g
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground leading-none">carbs</span>
+                                </div>
+                              )}
+                              {recipe.fat_g !== null && (
+                                <div className="flex flex-col items-center gap-1 flex-1">
+                                  <Droplet className="w-4 h-4 text-blue-500" />
+                                  <span className="text-xs font-semibold text-foreground">
+                                    {Math.round(recipe.fat_g)}g
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground leading-none">fat</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-4">
+                              {recipe.prep_time && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-4 h-4" />
+                                  {recipe.prep_time}
+                                </span>
+                              )}
+                              {recipe.servings && (
+                                <span className="flex items-center gap-1">
+                                  <Users className="w-4 h-4" />
+                                  {recipe.servings}
+                                </span>
+                              )}
+                            </div>
+                            {/* Archive/Delete button */}
+                            {showArchived ? (
                             <Tooltip content="Delete recipe">
                               <button
                                 onClick={(e) => {
@@ -574,7 +623,8 @@ export default function DashboardPage() {
                                 )}
                               </button>
                             </Tooltip>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </Link>
                     </CardContent>

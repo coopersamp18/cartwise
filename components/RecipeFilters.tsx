@@ -100,14 +100,12 @@ export default function RecipeFiltersComponent({
 
   return (
     <div
-      className={`h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex-shrink-0 flex flex-col relative ${
+      className={`h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex-shrink-0 flex flex-col ${
         isOpen ? "w-64" : "w-16"
       }`}
     >
-      {/* Toolbar */}
-      <div className="flex-shrink-0 p-3 border-b border-border flex flex-col h-full">
-        {/* Top Section - Always visible */}
-        <div className="space-y-2 flex-shrink-0">
+      {/* Top Section - Always visible */}
+      <div className="p-3 space-y-2 flex-shrink-0">
           {/* Filter Toggle - Sidebar icon */}
           <button
             onClick={onToggle}
@@ -220,10 +218,10 @@ export default function RecipeFiltersComponent({
               <span>{showFavorites ? "All Recipes" : "Favorites"}</span>
             )}
           </button>
-        </div>
+      </div>
 
-        {/* Middle Section - Scrollable Filters */}
-        {isOpen && (
+      {/* Middle Section - Scrollable Filters when open, or spacer when closed */}
+      {isOpen ? (
           <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent overflow-x-hidden">
             <div className="p-4 space-y-6">
               {/* Category Filter */}
@@ -389,16 +387,16 @@ export default function RecipeFiltersComponent({
               )}
             </div>
           </div>
-        )}
+      ) : (
+        <div className="flex-1"></div>
+      )}
 
-        {/* Profile at bottom - Sticky */}
-        <div className="flex-shrink-0 pt-2 border-t border-border bg-background relative z-50">
-          <div className={`flex items-center justify-center ${isOpen ? "px-2" : ""}`}>
-            <ProfileDropdown />
-          </div>
+      {/* Profile at bottom - Always anchored */}
+      <div className="flex-shrink-0 p-3 border-t border-border mt-auto">
+        <div className={`flex items-center justify-center ${isOpen ? "px-2" : ""}`}>
+          <ProfileDropdown />
         </div>
       </div>
-
     </div>
   );
 }
