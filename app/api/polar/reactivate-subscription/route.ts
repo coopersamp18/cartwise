@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getSubscription, upsertSubscription } from "@/lib/subscription";
 import { isPolarSandbox } from "@/lib/polar";
+import { Subscription } from "@/lib/types";
 
 export async function POST(request: Request) {
   try {
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
       // Map Polar status to our database status
       // IMPORTANT: When reactivating, we should NEVER set status to "trial"
       // This is a reactivation of an existing subscription, not a new subscription
-      let mappedStatus: string;
+      let mappedStatus: Subscription["status"];
       if (data.status === "active") {
         mappedStatus = "active";
       } else if (data.status === "canceled" && !data.cancel_at_period_end) {
