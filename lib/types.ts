@@ -13,8 +13,31 @@ export interface Recipe {
   cook_time_minutes: number | null;
   is_selected: boolean;
   is_favorited: boolean;
+  is_archived: boolean;
+  // Nutrition data (per serving)
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+  sugar_g: number | null;
+  sodium_mg: number | null;
+  cholesterol_mg: number | null;
+  saturated_fat_g: number | null;
   created_at: string;
   tags?: Tag[]; // Populated via join
+}
+
+export interface NutritionData {
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  fiber_g?: number;
+  sugar_g?: number;
+  sodium_mg?: number;
+  cholesterol_mg?: number;
+  saturated_fat_g?: number;
 }
 
 export interface RecipeStep {

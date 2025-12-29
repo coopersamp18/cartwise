@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseRecipeFromText, parseRecipeFromUrl } from "@/lib/openai";
+import { calculateNutritionFromIngredients, parseServings } from "@/lib/nutrition";
 
 export async function POST(request: Request) {
   try {
@@ -41,6 +42,23 @@ export async function POST(request: Request) {
         }
 
         const recipe = await parseRecipeFromUrl(url, htmlContent);
+        
+        // If nutrition data wasn't extracted, calculate it from ingredients
+        if (!recipe.nutrition && recipe.ingredients && recipe.ingredients.length > 0) {
+          const servings = parseServings(recipe.servings);
+          const calculatedNutrition = await calculateNutritionFromIngredients(
+            recipe.ingredients.map(ing => ({
+              name: ing.name,
+              quantity: ing.quantity || "1",
+              unit: ing.unit || "unit"
+            })),
+            servings
+          );
+          if (calculatedNutrition) {
+            recipe.nutrition = calculatedNutrition;
+          }
+        }
+        
         return NextResponse.json(recipe);
       } catch (error) {
         console.error("Fetch error:", error);
@@ -58,6 +76,23 @@ export async function POST(request: Request) {
       }
 
       const recipe = await parseRecipeFromText(text);
+      
+      // If nutrition data wasn't extracted, calculate it from ingredients
+      if (!recipe.nutrition && recipe.ingredients && recipe.ingredients.length > 0) {
+        const servings = parseServings(recipe.servings);
+        const calculatedNutrition = await calculateNutritionFromIngredients(
+          recipe.ingredients.map(ing => ({
+            name: ing.name,
+            quantity: ing.quantity || "1",
+            unit: ing.unit || "unit"
+          })),
+          servings
+        );
+        if (calculatedNutrition) {
+          recipe.nutrition = calculatedNutrition;
+        }
+      }
+      
       return NextResponse.json(recipe);
     } else {
       return NextResponse.json(

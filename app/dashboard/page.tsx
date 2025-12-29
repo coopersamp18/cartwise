@@ -20,7 +20,9 @@ import {
   Square,
   CheckSquare,
   X,
-  Star
+  Star,
+  Archive,
+  ArchiveRestore
 } from "lucide-react";
 
 const AISLE_ORDER = [
@@ -55,8 +57,9 @@ export default function DashboardPage() {
     prepTimeMax: null,
     cookTimeMax: null,
     totalTimeMax: null,
-    favoritesOnly: false,
   });
+  const [showArchived, setShowArchived] = useState(false);
+  const [showFavorites, setShowFavorites] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -85,6 +88,7 @@ export default function DashboardPage() {
         // Transform recipes to include tags array
         const recipesWithTags = recipesData.map((recipe: any) => ({
           ...recipe,
+          is_archived: recipe.is_archived ?? false, // Ensure boolean, default to false
           tags: recipe.recipe_tags?.map((rt: any) => rt.tag) || [],
         }));
         setAllRecipes(recipesWithTags);
@@ -121,8 +125,45 @@ export default function DashboardPage() {
   useEffect(() => {
     let filtered = [...allRecipes];
 
+    // Filter by archived status
+    // Treat null/undefined/false as not archived, only true values as archived
+    const isRecipeArchived = (recipe: Recipe) => {
+      const archived = recipe.is_archived;
+      // Handle boolean true, string "true", or number 1
+      return archived === true || archived === "true" || archived === 1;
+    };
+    
+    // Debug: Log all recipe archived statuses
+    if (process.env.NODE_ENV === 'development') {
+      console.log('All recipes archived status:', allRecipes.map(r => ({
+        title: r.title,
+        is_archived: r.is_archived,
+        type: typeof r.is_archived,
+        isTrue: r.is_archived === true
+      })));
+    }
+    
+    if (!showArchived) {
+      // Show only non-archived recipes
+      filtered = filtered.filter((recipe) => !isRecipeArchived(recipe));
+    } else {
+      // Show only archived recipes
+      filtered = filtered.filter((recipe) => isRecipeArchived(recipe));
+    }
+    
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Filtering recipes:', {
+        showArchived,
+        totalRecipes: allRecipes.length,
+        archivedCount: allRecipes.filter(r => r.is_archived === true).length,
+        filteredCount: filtered.length,
+        filteredTitles: filtered.map(r => r.title)
+      });
+    }
+
     // Filter by favorites
-    if (filters.favoritesOnly) {
+    if (showFavorites) {
       filtered = filtered.filter((recipe) => recipe.is_favorited);
     }
 
@@ -166,7 +207,7 @@ export default function DashboardPage() {
     }
 
     setRecipes(filtered);
-  }, [allRecipes, filters]);
+  }, [allRecipes, filters, showArchived, showFavorites]);
 
   // Helper function to parse time strings to minutes
   const parseTimeToMinutes = (timeStr: string | null): number | null => {
@@ -314,6 +355,21 @@ export default function DashboardPage() {
     loadData();
   };
 
+  const toggleArchive = async (recipeId: string, isArchived: boolean) => {
+    const newArchivedStatus = !isArchived;
+    const { error } = await supabase
+      .from("recipes")
+      .update({ is_archived: newArchivedStatus })
+      .eq("id", recipeId);
+    
+    if (error) {
+      console.error("Error toggling archive:", error);
+      alert(`Failed to ${newArchivedStatus ? 'archive' : 'unarchive'} recipe: ${error.message}`);
+    } else {
+      loadData();
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -387,38 +443,78 @@ export default function DashboardPage() {
 
           {/* Recipes Tab */}
           <TabsContent value="recipes">
-            <RecipeFiltersComponent
-              tags={tags}
-              filters={filters}
-              onFiltersChange={setFilters}
-            />
+            <div className="mb-6">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex-1">
+                  <RecipeFiltersComponent
+                    tags={tags}
+                    filters={filters}
+                    onFiltersChange={setFilters}
+                  />
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <Button
+                    variant={showFavorites ? "primary" : "secondary"}
+                    size="sm"
+                    onClick={() => setShowFavorites(!showFavorites)}
+                  >
+                    <Star className={`w-4 h-4 mr-2 ${showFavorites ? "fill-current" : ""}`} />
+                    {showFavorites ? "All Recipes" : "Favorites"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      console.log('Toggling showArchived from', showArchived, 'to', !showArchived);
+                      setShowArchived(!showArchived);
+                    }}
+                  >
+                    {showArchived ? (
+                      <>
+                        <ArchiveRestore className="w-4 h-4 mr-2" />
+                        Show Active
+                      </>
+                    ) : (
+                      <>
+                        <Archive className="w-4 h-4 mr-2" />
+                        Show Archived
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
             {recipes.length === 0 ? (
               <Card>
                 <CardContent className="py-16 text-center">
                   <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="font-serif text-xl font-bold mb-2">
-                    No recipes yet
+                    {showArchived ? "No archived recipes" : "No recipes yet"}
                   </h3>
                   <p className="text-muted-foreground mb-6">
-                    Add your first recipe to get started
+                    {showArchived 
+                      ? "You don't have any archived recipes" 
+                      : "Add your first recipe to get started"}
                   </p>
-                  <Link href="/recipe/new">
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Recipe
-                    </Button>
-                  </Link>
+                  {!showArchived && (
+                    <Link href="/recipe/new">
+                      <Button>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Recipe
+                      </Button>
+                    </Link>
+                  )}
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
                 {recipes.map((recipe) => (
                   <Card 
                     key={recipe.id} 
                     variant="interactive"
-                    className={`relative ${recipe.is_selected ? "ring-2 ring-primary" : ""}`}
+                    className={`relative flex flex-col ${recipe.is_selected ? "ring-2 ring-primary" : ""}`}
                   >
-                    <CardContent className="p-0">
+                    <CardContent className="p-0 relative flex flex-col flex-1">
                       {/* Recipe Image */}
                       {recipe.image_url && (
                         <Link href={`/recipe/${recipe.id}`}>
@@ -435,7 +531,7 @@ export default function DashboardPage() {
                         </Link>
                       )}
                       
-                      <div className="p-6">
+                      <div className="p-6 flex flex-col flex-1 min-h-0">
                         {/* Action buttons - below image, aligned to the right */}
                         <div className="flex items-center justify-end gap-2 mb-4">
                           <Tooltip 
@@ -480,7 +576,7 @@ export default function DashboardPage() {
                           </Tooltip>
                         </div>
 
-                        <Link href={`/recipe/${recipe.id}`}>
+                        <Link href={`/recipe/${recipe.id}`} className="flex-1 flex flex-col">
                           <div className="flex flex-wrap gap-2 mb-2">
                             {recipe.category && (
                               <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">
@@ -508,38 +604,63 @@ export default function DashboardPage() {
                           <h3 className="font-serif text-lg font-bold mb-2">
                             {recipe.title}
                           </h3>
-                        {recipe.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                            {recipe.description}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          {recipe.prep_time && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              {recipe.prep_time}
-                            </span>
+                          {recipe.description ? (
+                            <p className="text-sm text-muted-foreground line-clamp-2 mb-4 flex-1">
+                              {recipe.description}
+                            </p>
+                          ) : (
+                            <div className="flex-1"></div>
                           )}
-                          {recipe.servings && (
-                            <span className="flex items-center gap-1">
-                              <Users className="w-4 h-4" />
-                              {recipe.servings}
-                            </span>
-                          )}
-                        </div>
-                      </Link>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-auto">
+                            {recipe.prep_time && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-4 h-4" />
+                                {recipe.prep_time}
+                              </span>
+                            )}
+                            {recipe.servings && (
+                              <span className="flex items-center gap-1">
+                                <Users className="w-4 h-4" />
+                                {recipe.servings}
+                              </span>
+                            )}
+                          </div>
+                        </Link>
+                      </div>
 
-                      {/* Delete button */}
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          deleteRecipe(recipe.id);
-                        }}
-                        className="absolute bottom-4 right-4 p-1 hover:bg-red-50 rounded-lg transition-colors text-muted-foreground hover:text-red-500"
-                        title="Delete recipe"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {/* Archive/Delete button - bottom right of card */}
+                      <div className="absolute bottom-6 right-6 z-10">
+                        {showArchived ? (
+                          // Show delete button when viewing archived recipes
+                          <Tooltip content="Delete recipe">
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                deleteRecipe(recipe.id);
+                              }}
+                              className="p-2 hover:bg-red-50 rounded-lg transition-colors text-muted-foreground hover:text-red-500"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </Tooltip>
+                        ) : (
+                          // Show archive button when viewing active recipes
+                          <Tooltip content={recipe.is_archived ? "Unarchive recipe" : "Archive recipe"}>
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                toggleArchive(recipe.id, recipe.is_archived || false);
+                              }}
+                              className="p-2 hover:bg-muted rounded-lg transition-colors text-muted-foreground"
+                            >
+                              {recipe.is_archived ? (
+                                <ArchiveRestore className="w-4 h-4" />
+                              ) : (
+                                <Archive className="w-4 h-4" />
+                              )}
+                            </button>
+                          </Tooltip>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

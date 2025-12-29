@@ -123,6 +123,16 @@ export default function NewRecipePage() {
         ...baseRecipeData,
         ...(prepMinutes !== null && { prep_time_minutes: prepMinutes }),
         ...(cookMinutes !== null && { cook_time_minutes: cookMinutes }),
+        // Add nutrition data if available
+        ...(parsedRecipe.nutrition?.calories !== undefined && { calories: parsedRecipe.nutrition.calories }),
+        ...(parsedRecipe.nutrition?.protein_g !== undefined && { protein_g: parsedRecipe.nutrition.protein_g }),
+        ...(parsedRecipe.nutrition?.carbs_g !== undefined && { carbs_g: parsedRecipe.nutrition.carbs_g }),
+        ...(parsedRecipe.nutrition?.fat_g !== undefined && { fat_g: parsedRecipe.nutrition.fat_g }),
+        ...(parsedRecipe.nutrition?.fiber_g !== undefined && { fiber_g: parsedRecipe.nutrition.fiber_g }),
+        ...(parsedRecipe.nutrition?.sugar_g !== undefined && { sugar_g: parsedRecipe.nutrition.sugar_g }),
+        ...(parsedRecipe.nutrition?.sodium_mg !== undefined && { sodium_mg: parsedRecipe.nutrition.sodium_mg }),
+        ...(parsedRecipe.nutrition?.cholesterol_mg !== undefined && { cholesterol_mg: parsedRecipe.nutrition.cholesterol_mg }),
+        ...(parsedRecipe.nutrition?.saturated_fat_g !== undefined && { saturated_fat_g: parsedRecipe.nutrition.saturated_fat_g }),
       };
 
       const result = await supabase

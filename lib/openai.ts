@@ -4,6 +4,8 @@ export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+import { NutritionData } from "./types";
+
 export interface ParsedRecipe {
   title: string;
   description: string;
@@ -22,6 +24,7 @@ export interface ParsedRecipe {
     stepNumber: number;
     instruction: string;
   }[];
+  nutrition?: NutritionData; // Optional nutrition data per serving
 }
 
 export async function parseRecipeFromText(text: string): Promise<ParsedRecipe> {
@@ -36,6 +39,8 @@ For ingredient aisle categories, use one of these: "Produce", "Dairy", "Meat & S
 
 For recipe categories, use one of these: "Breakfast", "Lunch", "Dinner", "Appetizer", "Dessert", "Snack", "Beverage", "Side Dish", "Soup", "Salad".
 
+If nutritional information is explicitly provided in the recipe text, extract it. Otherwise, omit the "nutrition" field entirely (we will calculate it automatically from ingredients).
+
 Return valid JSON with this structure:
 {
   "title": "Recipe Title",
@@ -49,8 +54,21 @@ Return valid JSON with this structure:
   ],
   "steps": [
     {"stepNumber": 1, "instruction": "Step instruction"}
-  ]
-}`
+  ],
+  "nutrition": {
+    "calories": 250,
+    "protein_g": 15.5,
+    "carbs_g": 30.0,
+    "fat_g": 8.5,
+    "fiber_g": 5.0,
+    "sugar_g": 10.0,
+    "sodium_mg": 500.0,
+    "cholesterol_mg": 50.0,
+    "saturated_fat_g": 3.0
+  }
+}
+
+Note: Only include the "nutrition" object if it's explicitly provided in the recipe. If not provided, omit it entirely.`
       },
       {
         role: "user",
@@ -158,6 +176,8 @@ For ingredient aisle categories, use one of these: "Produce", "Dairy", "Meat & S
 
 For recipe categories, use one of these: "Breakfast", "Lunch", "Dinner", "Appetizer", "Dessert", "Snack", "Beverage", "Side Dish", "Soup", "Salad".
 
+If nutritional information is explicitly provided in the recipe, extract it. Otherwise, omit the "nutrition" field entirely (we will calculate it automatically from ingredients).
+
 Return valid JSON with this structure:
 {
   "title": "Recipe Title",
@@ -172,8 +192,21 @@ Return valid JSON with this structure:
   ],
   "steps": [
     {"stepNumber": 1, "instruction": "Step instruction"}
-  ]
-}`
+  ],
+  "nutrition": {
+    "calories": 250,
+    "protein_g": 15.5,
+    "carbs_g": 30.0,
+    "fat_g": 8.5,
+    "fiber_g": 5.0,
+    "sugar_g": 10.0,
+    "sodium_mg": 500.0,
+    "cholesterol_mg": 50.0,
+    "saturated_fat_g": 3.0
+  }
+}
+
+Note: Only include the "nutrition" object if it's explicitly provided in the recipe. If not provided, omit it entirely.`
       },
       {
         role: "user",

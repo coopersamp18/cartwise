@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button, Card, CardContent } from "./ui";
 import { Tag, RecipeCategory } from "@/lib/types";
-import { X, Filter, Star, Clock } from "lucide-react";
+import { X, Filter, Clock } from "lucide-react";
 
 export interface RecipeFilters {
   category: RecipeCategory | null;
@@ -11,7 +11,6 @@ export interface RecipeFilters {
   prepTimeMax: number | null; // Maximum prep time in minutes
   cookTimeMax: number | null; // Maximum cook time in minutes
   totalTimeMax: number | null; // Maximum total time in minutes
-  favoritesOnly: boolean;
 }
 
 interface RecipeFiltersProps {
@@ -70,7 +69,6 @@ export default function RecipeFiltersComponent({
       prepTimeMax: null,
       cookTimeMax: null,
       totalTimeMax: null,
-      favoritesOnly: false,
     });
   };
 
@@ -79,8 +77,7 @@ export default function RecipeFiltersComponent({
     filters.tags.length +
     (filters.prepTimeMax ? 1 : 0) +
     (filters.cookTimeMax ? 1 : 0) +
-    (filters.totalTimeMax ? 1 : 0) +
-    (filters.favoritesOnly ? 1 : 0);
+    (filters.totalTimeMax ? 1 : 0);
 
   return (
     <div className="mb-6">
@@ -109,23 +106,6 @@ export default function RecipeFiltersComponent({
       {isOpen && (
         <Card>
           <CardContent className="p-6 space-y-6">
-            {/* Favorites Filter */}
-            <div>
-              <label className="flex items-center gap-2 text-sm font-medium mb-3">
-                <Star className="w-4 h-4" />
-                Favorites
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={filters.favoritesOnly}
-                  onChange={(e) => updateFilter("favoritesOnly", e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300"
-                />
-                <span className="text-sm">Show only favorited recipes</span>
-              </label>
-            </div>
-
             {/* Category Filter */}
             <div>
               <label className="text-sm font-medium mb-3 block">Category</label>

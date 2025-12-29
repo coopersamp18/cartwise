@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Card, CardContent } from "@/components/ui";
+import NutritionTable from "@/components/NutritionTable";
 import { Recipe, RecipeStep, RecipeIngredient } from "@/lib/types";
 import { 
   ChefHat, 
@@ -15,7 +16,9 @@ import {
   Edit,
   Trash2,
   CheckSquare,
-  Square
+  Square,
+  Archive,
+  ArchiveRestore
 } from "lucide-react";
 
 export default function RecipePage() {
@@ -105,6 +108,22 @@ export default function RecipePage() {
     }
 
     setRecipe({ ...recipe, is_selected: !recipe.is_selected });
+  };
+
+  const toggleArchive = async () => {
+    if (!recipe) return;
+
+    await supabase
+      .from("recipes")
+      .update({ is_archived: !recipe.is_archived })
+      .eq("id", id);
+
+    setRecipe({ ...recipe, is_archived: !recipe.is_archived });
+    
+    // Navigate back to dashboard after archiving
+    if (!recipe.is_archived) {
+      router.push("/dashboard");
+    }
   };
 
   if (isLoading) {
@@ -231,7 +250,7 @@ export default function RecipePage() {
 
         <div className="grid md:grid-cols-3 gap-8">
           {/* Ingredients */}
-          <div className="md:col-span-1">
+          <div className="md:col-span-1 space-y-6">
             <Card>
               <CardContent className="p-6">
                 <h2 className="font-serif text-xl font-bold mb-4">Ingredients</h2>
@@ -257,6 +276,24 @@ export default function RecipePage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Nutrition Table */}
+            {recipe && (
+              <NutritionTable
+                nutrition={{
+                  calories: recipe.calories ?? undefined,
+                  protein_g: recipe.protein_g ?? undefined,
+                  carbs_g: recipe.carbs_g ?? undefined,
+                  fat_g: recipe.fat_g ?? undefined,
+                  fiber_g: recipe.fiber_g ?? undefined,
+                  sugar_g: recipe.sugar_g ?? undefined,
+                  sodium_mg: recipe.sodium_mg ?? undefined,
+                  cholesterol_mg: recipe.cholesterol_mg ?? undefined,
+                  saturated_fat_g: recipe.saturated_fat_g ?? undefined,
+                }}
+                servings={recipe.servings}
+              />
+            )}
           </div>
 
           {/* Instructions */}
@@ -281,6 +318,19 @@ export default function RecipePage() {
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 mt-8 pt-8 border-t border-border">
+          <Button variant="ghost" onClick={toggleArchive}>
+            {recipe.is_archived ? (
+              <>
+                <ArchiveRestore className="w-4 h-4 mr-2" />
+                Unarchive
+              </>
+            ) : (
+              <>
+                <Archive className="w-4 h-4 mr-2" />
+                Archive
+              </>
+            )}
+          </Button>
           <Button variant="ghost" onClick={handleDelete}>
             <Trash2 className="w-4 h-4 mr-2" />
             Delete Recipe
