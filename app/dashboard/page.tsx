@@ -364,7 +364,7 @@ export default function DashboardPage() {
     
     if (error) {
       console.error("Error toggling archive:", error);
-      alert(`Failed to ${newArchivedStatus ? 'archive' : 'unarchive'} recipe: ${error.message}`);
+      alert(`Failed to ${newArchivedStatus ? "archive" : "unarchive"} recipe: ${error.message}`);
     } else {
       loadData();
     }
@@ -493,7 +493,7 @@ export default function DashboardPage() {
                   </h3>
                   <p className="text-muted-foreground mb-6">
                     {showArchived 
-                      ? "You don't have any archived recipes" 
+                      ? "You don&apos;t have any archived recipes" 
                       : "Add your first recipe to get started"}
                   </p>
                   {!showArchived && (

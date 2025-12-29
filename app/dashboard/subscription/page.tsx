@@ -372,7 +372,7 @@ export default function SubscriptionPage() {
                           year: "numeric",
                           month: "long",
                           day: "numeric"
-                        })}. You'll continue to have access until then.
+                        })}. You&apos;ll continue to have access until then.
                       </p>
                     </div>
                   </div>
@@ -404,7 +404,7 @@ export default function SubscriptionPage() {
                       {isCanceling ? "Canceling..." : "Cancel Subscription"}
                     </Button>
                     <p className="text-xs text-muted-foreground mt-2 text-center">
-                      You'll continue to have access until the end of your billing period
+                      You&apos;ll continue to have access until the end of your billing period
                     </p>
                   </div>
                 )}

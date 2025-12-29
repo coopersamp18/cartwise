@@ -356,7 +356,7 @@ export default function SettingsPage() {
                   </p>
                   {avatarFile && !isSaving && (
                     <p className="text-xs text-amber-600 font-medium">
-                      ⚠️ File selected. Click "Save Changes" below to upload to Supabase.
+                      ⚠️ File selected. Click &quot;Save Changes&quot; below to upload to Supabase.
                     </p>
                   )}
                   {isSaving && avatarFile && (
