@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, CardContent } from "@/components/ui";
+import TagSelector from "@/components/TagSelector";
 import { ParsedRecipe } from "@/lib/openai";
+import { Tag } from "@/lib/types";
 import { 
   ChefHat, 
   ArrowLeft, 
@@ -27,9 +29,24 @@ export default function NewRecipePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [parsedRecipe, setParsedRecipe] = useState<ParsedRecipe | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   
   const router = useRouter();
   const supabase = createClient();
+
+  // Load tags on mount
+  useEffect(() => {
+    const loadTags = async () => {
+      const { data } = await supabase
+        .from("tags")
+        .select("*")
+        .order("category", { ascending: true })
+        .order("name", { ascending: true });
+      if (data) setTags(data);
+    };
+    loadTags();
+  }, [supabase]);
 
   const handleExtract = async () => {
     setError("");
@@ -70,23 +87,91 @@ export default function NewRecipePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Insert recipe
-      const { data: recipe, error: recipeError } = await supabase
+      // Parse time strings to minutes
+      const parseTimeToMinutes = (timeStr: string | null): number | null => {
+        if (!timeStr) return null;
+        const hourMatch = timeStr.match(/(\d+)\s*h/i);
+        const minMatch = timeStr.match(/(\d+)\s*m/i);
+        const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
+        const minutes = minMatch ? parseInt(minMatch[1]) : 0;
+        const total = hours * 60 + minutes;
+        return total > 0 ? total : null;
+      };
+
+      // Build base recipe data (always works)
+      const baseRecipeData = {
+        user_id: user.id,
+        title: parsedRecipe.title,
+        description: parsedRecipe.description,
+        category: parsedRecipe.category,
+        source_url: mode === "url" ? url : null,
+        image_url: parsedRecipe.imageUrl || null,
+        servings: parsedRecipe.servings,
+        prep_time: parsedRecipe.prepTime,
+        cook_time: parsedRecipe.cookTime,
+      };
+
+      // Try to insert with new fields first (if migration has been run)
+      const prepMinutes = parseTimeToMinutes(parsedRecipe.prepTime);
+      const cookMinutes = parseTimeToMinutes(parsedRecipe.cookTime);
+      
+      let recipe;
+      let recipeError;
+      
+      // First attempt: try with new fields
+      const recipeDataWithNewFields = {
+        ...baseRecipeData,
+        ...(prepMinutes !== null && { prep_time_minutes: prepMinutes }),
+        ...(cookMinutes !== null && { cook_time_minutes: cookMinutes }),
+      };
+
+      const result = await supabase
         .from("recipes")
-        .insert({
-          user_id: user.id,
-          title: parsedRecipe.title,
-          description: parsedRecipe.description,
-          category: parsedRecipe.category,
-          source_url: mode === "url" ? url : null,
-          servings: parsedRecipe.servings,
-          prep_time: parsedRecipe.prepTime,
-          cook_time: parsedRecipe.cookTime,
-        })
+        .insert(recipeDataWithNewFields)
         .select()
         .single();
 
-      if (recipeError) throw recipeError;
+      recipe = result.data;
+      recipeError = result.error;
+
+      // If that failed, try without new fields (migration not run yet)
+      if (recipeError && recipeError.message?.includes("column") && recipeError.message?.includes("does not exist")) {
+        console.warn("New columns don't exist, saving without them. Run the migration to enable tags and filters.");
+        const fallbackResult = await supabase
+          .from("recipes")
+          .insert(baseRecipeData)
+          .select()
+          .single();
+        
+        recipe = fallbackResult.data;
+        recipeError = fallbackResult.error;
+      }
+
+      if (recipeError || !recipe) {
+        console.error("Recipe insert error:", recipeError);
+        throw new Error(`Failed to save recipe: ${recipeError?.message || "Unknown error"}`);
+      }
+
+      // Insert tags (only if recipe_tags table exists)
+      if (selectedTagIds.length > 0) {
+        try {
+          const { error: tagsError } = await supabase
+            .from("recipe_tags")
+            .insert(
+              selectedTagIds.map((tagId) => ({
+                recipe_id: recipe.id,
+                tag_id: tagId,
+              }))
+            );
+          if (tagsError) {
+            console.error("Tags insert error:", tagsError);
+            // Don't fail the whole save if tags fail - just log it
+            console.warn("Failed to save tags, but recipe was saved successfully");
+          }
+        } catch (tagsErr) {
+          console.warn("Tags table may not exist yet. Recipe saved without tags.");
+        }
+      }
 
       // Insert steps
       if (parsedRecipe.steps.length > 0) {
@@ -118,7 +203,13 @@ export default function NewRecipePage() {
 
       router.push(`/recipe/${recipe.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save recipe");
+      console.error("Save recipe error:", err);
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : typeof err === 'object' && err !== null && 'message' in err
+        ? String(err.message)
+        : "Failed to save recipe. Please check the browser console for details.";
+      setError(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -339,13 +430,18 @@ export default function NewRecipePage() {
                     onChange={(e) => setParsedRecipe({ ...parsedRecipe, description: e.target.value })}
                   />
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <Input
-                    id="category"
-                    label="Category"
-                    value={parsedRecipe.category}
-                    onChange={(e) => setParsedRecipe({ ...parsedRecipe, category: e.target.value })}
-                  />
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-muted-foreground mb-2">
+                      Category <span className="text-xs text-muted-foreground">(auto-detected)</span>
+                    </label>
+                    <Input
+                      id="category"
+                      value={parsedRecipe.category || ""}
+                      onChange={(e) => setParsedRecipe({ ...parsedRecipe, category: e.target.value })}
+                      placeholder="Auto-populated from recipe"
+                    />
+                  </div>
                   <Input
                     id="servings"
                     label="Servings"
@@ -357,14 +453,23 @@ export default function NewRecipePage() {
                     label="Prep Time"
                     value={parsedRecipe.prepTime || ""}
                     onChange={(e) => setParsedRecipe({ ...parsedRecipe, prepTime: e.target.value })}
+                    placeholder="e.g., 30 min"
                   />
                   <Input
                     id="cookTime"
                     label="Cook Time"
                     value={parsedRecipe.cookTime || ""}
                     onChange={(e) => setParsedRecipe({ ...parsedRecipe, cookTime: e.target.value })}
+                    placeholder="e.g., 1 hour"
                   />
                 </div>
+
+                {/* Tags */}
+                <TagSelector
+                  availableTags={tags}
+                  selectedTagIds={selectedTagIds}
+                  onSelectionChange={setSelectedTagIds}
+                />
               </CardContent>
             </Card>
 

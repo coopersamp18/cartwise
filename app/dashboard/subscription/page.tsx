@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Card, CardContent, CardHeader } from "@/components/ui";
@@ -11,19 +11,25 @@ import {
   isSubscriptionActive, 
   getTrialDaysRemaining 
 } from "@/lib/subscription-client";
-import { ChefHat, ArrowLeft, CreditCard, Calendar, AlertCircle, CheckCircle, XCircle, ExternalLink, Loader2 } from "lucide-react";
+import { ChefHat, CreditCard, Calendar, AlertCircle, CheckCircle, XCircle, ExternalLink, Loader2, FileText } from "lucide-react";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 
 export default function SubscriptionPage() {
   const [user, setUser] = useState<{ id: string; email?: string | null } | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCanceling, setIsCanceling] = useState(false);
+  const [isReactivating, setIsReactivating] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [billingInfo, setBillingInfo] = useState<any>(null);
   const [isLoadingBilling, setIsLoadingBilling] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [billingHistory, setBillingHistory] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   useEffect(() => {
@@ -42,6 +48,7 @@ export default function SubscriptionPage() {
         // Load billing information if subscription exists
         if (sub) {
           loadBillingInfo();
+          loadBillingHistory();
         }
       } catch (error) {
         console.error("Error loading subscription:", error);
@@ -57,9 +64,11 @@ export default function SubscriptionPage() {
         const response = await fetch("/api/polar/billing-info");
         if (response.ok) {
           const data = await response.json();
+          console.log("[subscription-page] Billing info data:", data);
           setBillingInfo(data.billingInfo);
         } else {
-          console.error("Failed to load billing information");
+          const errorData = await response.json().catch(() => ({}));
+          console.error("Failed to load billing information:", response.status, errorData);
         }
       } catch (error) {
         console.error("Error loading billing information:", error);
@@ -68,8 +77,39 @@ export default function SubscriptionPage() {
       }
     };
 
+    const loadBillingHistory = async () => {
+      setIsLoadingHistory(true);
+      try {
+        const response = await fetch("/api/polar/billing-history");
+        if (response.ok) {
+          const data = await response.json();
+          console.log("[subscription-page] Billing history data:", data);
+          setBillingHistory(data.invoices || []);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error("Failed to load billing history:", response.status, errorData);
+        }
+      } catch (error) {
+        console.error("Error loading billing history:", error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
     loadData();
-  }, [supabase, router]);
+
+    // Check for payment update success
+    if (searchParams.get("payment_updated") === "true") {
+      setSuccess("Payment method updated successfully!");
+      // Remove query param from URL
+      router.replace("/dashboard/subscription", { scroll: false });
+      // Reload billing info
+      setTimeout(() => {
+        loadBillingInfo();
+        loadBillingHistory();
+      }, 1000);
+    }
+  }, [supabase, router, searchParams]);
 
   const handleOpenCustomerPortal = async () => {
     setIsOpeningPortal(true);
@@ -87,6 +127,75 @@ export default function SubscriptionPage() {
       setError("Failed to open customer portal. Please try again.");
     } finally {
       setIsOpeningPortal(false);
+    }
+  };
+
+  const handleUpdatePaymentMethod = async () => {
+    setIsUpdatingPayment(true);
+    setError("");
+    try {
+      const response = await fetch("/api/polar/update-payment-method", {
+        method: "POST",
+      });
+      const data = await response.json();
+      
+      if (response.ok && data.checkoutUrl) {
+        // Open in a new window
+        const paymentWindow = window.open(
+          data.checkoutUrl,
+          "_blank",
+          "width=600,height=700,scrollbars=yes"
+        );
+        
+        // Listen for when the window closes to refresh billing info
+        const checkClosed = setInterval(() => {
+          if (paymentWindow?.closed) {
+            clearInterval(checkClosed);
+            // Reload billing info after payment update
+            loadBillingInfo();
+            loadBillingHistory();
+          }
+        }, 500);
+      } else {
+        setError(data.error || "Failed to open payment update");
+      }
+    } catch (error) {
+      console.error("Error updating payment method:", error);
+      setError("Failed to update payment method. Please try again.");
+    } finally {
+      setIsUpdatingPayment(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (!subscription) return;
+
+    setIsReactivating(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/polar/reactivate-subscription", {
+        method: "POST",
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        // Refresh subscription data
+        if (user) {
+          const updated = await getSubscriptionClient(user.id);
+          setSubscription(updated);
+        }
+        setSuccess("Subscription reactivated successfully! Your card will be charged and your subscription will continue.");
+      } else {
+        setError(data.error || "Failed to reactivate subscription");
+      }
+    } catch (error) {
+      console.error("Error reactivating subscription:", error);
+      setError("Failed to reactivate subscription. Please try again.");
+    } finally {
+      setIsReactivating(false);
     }
   };
 
@@ -146,12 +255,7 @@ export default function SubscriptionPage() {
             <ChefHat className="w-8 h-8 text-primary" />
             <span className="font-serif text-xl font-bold">Cartwise</span>
           </Link>
-          <Link href="/dashboard">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-          </Link>
+          <ProfileDropdown />
         </div>
       </nav>
 
@@ -277,13 +381,14 @@ export default function SubscriptionPage() {
                 {subscription.status === "canceled" && (
                   <div className="pt-4 border-t border-border">
                     <Button 
-                      onClick={() => router.push("/auth/subscribe")}
+                      onClick={handleReactivate}
+                      disabled={isReactivating}
                       className="w-full"
                     >
-                      Reactivate Subscription
+                      {isReactivating ? "Reactivating..." : "Reactivate Subscription"}
                     </Button>
                     <p className="text-xs text-muted-foreground mt-2 text-center">
-                      Resubscribe to continue your access after the current period ends
+                      Your subscription will be reactivated and your card on file will be charged
                     </p>
                   </div>
                 )}
@@ -307,10 +412,11 @@ export default function SubscriptionPage() {
                 {!isActive && subscription.status !== "canceled" && (
                   <div className="pt-4">
                     <Button 
-                      onClick={() => router.push("/auth/subscribe")}
+                      onClick={handleReactivate}
+                      disabled={isReactivating}
                       className="w-full"
                     >
-                      Reactivate Subscription
+                      {isReactivating ? "Reactivating..." : "Reactivate Subscription"}
                     </Button>
                   </div>
                 )}
@@ -320,13 +426,162 @@ export default function SubscriptionPage() {
             {/* Billing Information */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <h2 className="font-serif text-xl font-bold">Billing Information</h2>
+                <h2 className="font-serif text-xl font-bold">Billing Information</h2>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Payment Method Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                      Payment Method
+                    </h3>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleUpdatePaymentMethod}
+                      disabled={isUpdatingPayment}
+                    >
+                      {isUpdatingPayment ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Opening...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          Update
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  
+                  {billingInfo?.paymentMethod && (billingInfo.paymentMethod.last4 || billingInfo.paymentMethod.type) ? (
+                    <div className="bg-muted p-4 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <CreditCard className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">
+                            {billingInfo.paymentMethod.brand 
+                              ? `${billingInfo.paymentMethod.brand.charAt(0).toUpperCase() + billingInfo.paymentMethod.brand.slice(1)}` 
+                              : billingInfo.paymentMethod.type 
+                              ? billingInfo.paymentMethod.type.charAt(0).toUpperCase() + billingInfo.paymentMethod.type.slice(1)
+                              : "Card"} 
+                            {billingInfo.paymentMethod.last4 ? ` •••• ${billingInfo.paymentMethod.last4}` : ""}
+                          </p>
+                          {billingInfo.paymentMethod.expiryMonth && billingInfo.paymentMethod.expiryYear && (
+                            <p className="text-sm text-muted-foreground">
+                              Expires {String(billingInfo.paymentMethod.expiryMonth).padStart(2, '0')}/{billingInfo.paymentMethod.expiryYear}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    isLoadingBilling && (
+                      <div className="bg-muted p-4 rounded-lg text-center">
+                        <p className="text-sm text-muted-foreground">
+                          Loading payment method...
+                        </p>
+                      </div>
+                    )
+                  )}
+                </div>
+
+                {/* Billing Details */}
+                <div className="space-y-3 pt-4 border-t border-border">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                    Account Details
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Email</span>
+                      <span className="font-medium">{billingInfo?.email || user?.email || "N/A"}</span>
+                    </div>
+                    {billingInfo?.name && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Name</span>
+                        <span className="font-medium">{billingInfo.name}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Member since</span>
+                      <span className="font-medium">
+                        {new Date(subscription.created_at).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric"
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                  {isLoadingBilling && (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Billing History */}
+                <div className="space-y-3 pt-4 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                      Billing History
+                    </h3>
+                    {isLoadingHistory && (
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                  
+                  {billingHistory.length > 0 ? (
+                    <div className="space-y-2">
+                      {billingHistory.slice(0, 5).map((invoice: any) => (
+                        <div
+                          key={invoice.id}
+                          className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-4 h-4 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-sm">
+                                ${invoice.amount_total ? (invoice.amount_total / 100).toFixed(2) : (invoice.amount ? (invoice.amount / 100).toFixed(2) : "0.00")}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {invoice.created_at
+                                  ? new Date(invoice.created_at).toLocaleDateString("en-US", {
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric"
+                                    })
+                                  : "N/A"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {invoice.status === "paid" && (
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            )}
+                            <span className="text-xs text-muted-foreground capitalize">
+                              {invoice.status || "pending"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : !isLoadingHistory ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No billing history available
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Alternative Portal Access */}
+                <div className="pt-4 border-t border-border">
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={handleOpenCustomerPortal}
                     disabled={isOpeningPortal}
+                    className="w-full"
                   >
                     {isOpeningPortal ? (
                       <>
@@ -336,45 +591,12 @@ export default function SubscriptionPage() {
                     ) : (
                       <>
                         <ExternalLink className="w-4 h-4 mr-2" />
-                        Update Billing
+                        Open Full Customer Portal
                       </>
                     )}
                   </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Email</span>
-                  <span className="font-medium">{billingInfo?.email || user?.email || "N/A"}</span>
-                </div>
-                {billingInfo?.name && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Name</span>
-                    <span className="font-medium">{billingInfo.name}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Customer ID</span>
-                  <span className="font-mono text-xs">{subscription.polar_customer_id || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subscription ID</span>
-                  <span className="font-mono text-xs">{subscription.polar_subscription_id || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Created</span>
-                  <span className="font-medium">
-                    {new Date(subscription.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-                {isLoadingBilling && (
-                  <div className="flex items-center justify-center py-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                  </div>
-                )}
-                <div className="pt-3 border-t border-border">
-                  <p className="text-xs text-muted-foreground">
-                    Use the "Update Billing" button above to manage your payment method, billing address, and view billing history in the secure customer portal.
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Access advanced billing management options in the customer portal
                   </p>
                 </div>
               </CardContent>

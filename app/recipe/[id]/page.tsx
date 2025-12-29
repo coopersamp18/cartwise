@@ -148,6 +148,19 @@ export default function RecipePage() {
       <main className="max-w-4xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
+          {recipe.image_url && (
+            <div className="mb-6 rounded-2xl overflow-hidden shadow-lg">
+              <img
+                src={recipe.image_url}
+                alt={recipe.title}
+                className="w-full h-[400px] object-cover"
+                onError={(e) => {
+                  // Hide image if it fails to load
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </div>
+          )}
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               {recipe.category && (

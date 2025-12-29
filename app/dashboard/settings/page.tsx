@@ -13,7 +13,8 @@ import {
   deleteAvatar,
   getUserInitials,
 } from "@/lib/profile";
-import { ChefHat, ArrowLeft, Upload, X, Save } from "lucide-react";
+import { ChefHat, Upload, X, Save } from "lucide-react";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 
 export default function SettingsPage() {
   const [user, setUser] = useState<{ id: string; email?: string | null } | null>(null);
@@ -65,9 +66,10 @@ export default function SettingsPage() {
     console.log("[handleAvatarSelect] File selected:", file?.name);
     if (!file) return;
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file");
+    // Validate file type - only JPG and PNG allowed
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
+    if (!allowedTypes.includes(file.type)) {
+      setError("Please select a JPG or PNG image file");
       return;
     }
 
@@ -255,12 +257,7 @@ export default function SettingsPage() {
             <ChefHat className="w-8 h-8 text-primary" />
             <span className="font-serif text-xl font-bold">Cartwise</span>
           </Link>
-          <Link href="/dashboard">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-          </Link>
+          <ProfileDropdown />
         </div>
       </nav>
 
@@ -330,7 +327,7 @@ export default function SettingsPage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/jpg,image/png"
                       onChange={handleAvatarSelect}
                       className="hidden"
                       id="avatar-upload"
@@ -355,7 +352,7 @@ export default function SettingsPage() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    JPG, PNG or GIF. Max size 5MB.
+                    JPG or PNG. Max size 5MB.
                   </p>
                   {avatarFile && !isSaving && (
                     <p className="text-xs text-amber-600 font-medium">

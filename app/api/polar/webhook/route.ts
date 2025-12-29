@@ -274,14 +274,34 @@ export async function POST(request: Request) {
           currentPeriodEnd,
         });
 
+        // Check if this is an existing subscription (to prevent new trials on reactivation)
+        const { data: existingSubscription } = await supabase
+          .from("subscriptions")
+          .select("status, trial_ends_at")
+          .eq("polar_subscription_id", subscriptionId)
+          .single();
+
         // Map Polar statuses to our database statuses
         let mappedStatus: string;
+        let shouldPreserveTrialEndsAt = false;
+        
         switch (polarStatus) {
           case "trialing":
-            mappedStatus = "trial";
+            // If this is a reactivation of a canceled subscription, don't create a new trial
+            if (existingSubscription && existingSubscription.status === "canceled") {
+              console.log("Preventing new trial on reactivation - treating as active");
+              mappedStatus = "active";
+              shouldPreserveTrialEndsAt = true; // Don't set a new trial_ends_at
+            } else {
+              mappedStatus = "trial";
+            }
             break;
           case "active":
             mappedStatus = "active";
+            // If reactivating from canceled, preserve existing trial_ends_at (don't create new trial)
+            if (existingSubscription && existingSubscription.status === "canceled") {
+              shouldPreserveTrialEndsAt = true;
+            }
             break;
           case "past_due":
             mappedStatus = "past_due";
@@ -297,14 +317,27 @@ export async function POST(request: Request) {
             mappedStatus = "inactive";
         }
 
+        const updateData: any = {
+          status: mappedStatus,
+          polar_customer_id: customerId, // Ensure customer_id is always set
+          current_period_end: currentPeriodEnd,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Only set trial_ends_at if this is NOT a reactivation
+        if (!shouldPreserveTrialEndsAt && polarStatus === "trialing" && existingSubscription?.status !== "canceled") {
+          // Only set trial_ends_at for new trials, not reactivations
+          const trialEndsAt = new Date();
+          trialEndsAt.setDate(trialEndsAt.getDate() + 3);
+          updateData.trial_ends_at = trialEndsAt.toISOString();
+        } else if (shouldPreserveTrialEndsAt) {
+          // Preserve existing trial_ends_at (or null) when reactivating
+          updateData.trial_ends_at = existingSubscription?.trial_ends_at || null;
+        }
+
         const { error } = await supabase
           .from("subscriptions")
-          .update({
-            status: mappedStatus,
-            polar_customer_id: customerId, // Ensure customer_id is always set
-            current_period_end: currentPeriodEnd,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq("polar_subscription_id", subscriptionId);
 
         if (error) {

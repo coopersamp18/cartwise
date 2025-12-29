@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
+import { Button, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, Tooltip } from "@/components/ui";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
-import { Recipe, ShoppingListItem, Subscription } from "@/lib/types";
+import RecipeFiltersComponent, { RecipeFilters } from "@/components/RecipeFilters";
+import { Recipe, ShoppingListItem, Subscription, Tag } from "@/lib/types";
 import { 
   ChefHat, 
   Plus, 
@@ -18,7 +19,8 @@ import {
   Trash2,
   Square,
   CheckSquare,
-  X
+  X,
+  Star
 } from "lucide-react";
 
 const AISLE_ORDER = [
@@ -39,25 +41,64 @@ const AISLE_ORDER = [
 
 export default function DashboardPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>([]); // Unfiltered recipes
+  const [tags, setTags] = useState<Tag[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<{ email?: string } | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [trialDaysRemaining, setTrialDaysRemaining] = useState<number>(0);
-  const [showTrialBanner, setShowTrialBanner] = useState(true);
+  const [showTrialBanner, setShowTrialBanner] = useState(false);
+  const [filters, setFilters] = useState<RecipeFilters>({
+    category: null,
+    tags: [],
+    prepTimeMax: null,
+    cookTimeMax: null,
+    totalTimeMax: null,
+    favoritesOnly: false,
+  });
   const router = useRouter();
   const supabase = createClient();
 
+  // Check sessionStorage on mount to see if banner was dismissed this session
+  useEffect(() => {
+    const bannerDismissed = sessionStorage.getItem('trialBannerDismissed');
+    if (!bannerDismissed) {
+      setShowTrialBanner(true);
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
-      // Load recipes
+      // Load recipes with tags
       const { data: recipesData } = await supabase
         .from("recipes")
-        .select("*")
+        .select(`
+          *,
+          recipe_tags (
+            tag:tags (*)
+          )
+        `)
         .order("created_at", { ascending: false });
 
       if (recipesData) {
-        setRecipes(recipesData);
+        // Transform recipes to include tags array
+        const recipesWithTags = recipesData.map((recipe: any) => ({
+          ...recipe,
+          tags: recipe.recipe_tags?.map((rt: any) => rt.tag) || [],
+        }));
+        setAllRecipes(recipesWithTags);
+      }
+
+      // Load tags
+      const { data: tagsData } = await supabase
+        .from("tags")
+        .select("*")
+        .order("category", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (tagsData) {
+        setTags(tagsData);
       }
 
       // Load shopping list
@@ -75,6 +116,69 @@ export default function DashboardPage() {
       setIsLoading(false);
     }
   }, [supabase]);
+
+  // Apply filters to recipes
+  useEffect(() => {
+    let filtered = [...allRecipes];
+
+    // Filter by favorites
+    if (filters.favoritesOnly) {
+      filtered = filtered.filter((recipe) => recipe.is_favorited);
+    }
+
+    // Filter by category
+    if (filters.category) {
+      filtered = filtered.filter((recipe) => recipe.category === filters.category);
+    }
+
+    // Filter by tags
+    if (filters.tags.length > 0) {
+      filtered = filtered.filter((recipe) => {
+        const recipeTagIds = recipe.tags?.map((tag) => tag.id) || [];
+        return filters.tags.some((tagId) => recipeTagIds.includes(tagId));
+      });
+    }
+
+    // Filter by prep time
+    if (filters.prepTimeMax) {
+      filtered = filtered.filter((recipe) => {
+        const prepTime = recipe.prep_time_minutes || parseTimeToMinutes(recipe.prep_time);
+        return prepTime !== null && prepTime <= filters.prepTimeMax!;
+      });
+    }
+
+    // Filter by cook time
+    if (filters.cookTimeMax) {
+      filtered = filtered.filter((recipe) => {
+        const cookTime = recipe.cook_time_minutes || parseTimeToMinutes(recipe.cook_time);
+        return cookTime !== null && cookTime <= filters.cookTimeMax!;
+      });
+    }
+
+    // Filter by total time
+    if (filters.totalTimeMax) {
+      filtered = filtered.filter((recipe) => {
+        const prepTime = recipe.prep_time_minutes || parseTimeToMinutes(recipe.prep_time) || 0;
+        const cookTime = recipe.cook_time_minutes || parseTimeToMinutes(recipe.cook_time) || 0;
+        const totalTime = prepTime + cookTime;
+        return totalTime > 0 && totalTime <= filters.totalTimeMax!;
+      });
+    }
+
+    setRecipes(filtered);
+  }, [allRecipes, filters]);
+
+  // Helper function to parse time strings to minutes
+  const parseTimeToMinutes = (timeStr: string | null): number | null => {
+    if (!timeStr) return null;
+    // Try to parse formats like "30 min", "1 hour", "1h 30m", etc.
+    const hourMatch = timeStr.match(/(\d+)\s*h/i);
+    const minMatch = timeStr.match(/(\d+)\s*m/i);
+    const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
+    const minutes = minMatch ? parseInt(minMatch[1]) : 0;
+    const total = hours * 60 + minutes;
+    return total > 0 ? total : null;
+  };
 
   useEffect(() => {
     const getUser = async () => {
@@ -202,6 +306,14 @@ export default function DashboardPage() {
     loadData();
   };
 
+  const toggleFavorite = async (recipeId: string, isFavorited: boolean) => {
+    await supabase
+      .from("recipes")
+      .update({ is_favorited: !isFavorited })
+      .eq("id", recipeId);
+    loadData();
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -232,7 +344,10 @@ export default function DashboardPage() {
               Enjoying Cartwise? Your subscription will automatically continue at $5/month.
             </p>
             <button
-              onClick={() => setShowTrialBanner(false)}
+              onClick={() => {
+                setShowTrialBanner(false);
+                sessionStorage.setItem('trialBannerDismissed', 'true');
+              }}
               className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-primary/20 rounded-lg transition-colors"
               title="Close banner"
             >
@@ -272,6 +387,11 @@ export default function DashboardPage() {
 
           {/* Recipes Tab */}
           <TabsContent value="recipes">
+            <RecipeFiltersComponent
+              tags={tags}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
             {recipes.length === 0 ? (
               <Card>
                 <CardContent className="py-16 text-center">
@@ -298,32 +418,96 @@ export default function DashboardPage() {
                     variant="interactive"
                     className={`relative ${recipe.is_selected ? "ring-2 ring-primary" : ""}`}
                   >
-                    <CardContent className="p-6">
-                      {/* Selection checkbox */}
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          toggleRecipeSelection(recipe.id, recipe.is_selected);
-                        }}
-                        className="absolute top-4 right-4 p-1 hover:bg-muted rounded-lg transition-colors"
-                        title={recipe.is_selected ? "Remove from shopping list" : "Add to shopping list"}
-                      >
-                        {recipe.is_selected ? (
-                          <CheckSquare className="w-5 h-5 text-primary" />
-                        ) : (
-                          <Square className="w-5 h-5 text-muted-foreground" />
-                        )}
-                      </button>
+                    <CardContent className="p-0">
+                      {/* Recipe Image */}
+                      {recipe.image_url && (
+                        <Link href={`/recipe/${recipe.id}`}>
+                          <div className="relative w-full h-48 overflow-hidden rounded-t-xl">
+                            <img
+                              src={recipe.image_url}
+                              alt={recipe.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        </Link>
+                      )}
+                      
+                      <div className="p-6">
+                        {/* Action buttons - below image, aligned to the right */}
+                        <div className="flex items-center justify-end gap-2 mb-4">
+                          <Tooltip 
+                            content={recipe.is_favorited ? "Remove from favorites" : "Add to favorites"}
+                            position="top"
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                toggleFavorite(recipe.id, recipe.is_favorited || false);
+                              }}
+                              className="p-2 hover:bg-muted rounded-lg transition-colors"
+                            >
+                              <Star
+                                className={`w-5 h-5 ${
+                                  recipe.is_favorited
+                                    ? "text-yellow-500 fill-yellow-500"
+                                    : "text-muted-foreground"
+                                }`}
+                              />
+                            </button>
+                          </Tooltip>
+                          <Tooltip 
+                            content={recipe.is_selected ? "Remove from shopping list" : "Add to shopping list"}
+                            position="top"
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                toggleRecipeSelection(recipe.id, recipe.is_selected);
+                              }}
+                              className="p-2 hover:bg-muted rounded-lg transition-colors"
+                            >
+                              <ShoppingCart
+                                className={`w-5 h-5 ${
+                                  recipe.is_selected
+                                    ? "text-primary"
+                                    : "text-muted-foreground"
+                                }`}
+                              />
+                            </button>
+                          </Tooltip>
+                        </div>
 
-                      <Link href={`/recipe/${recipe.id}`}>
-                        {recipe.category && (
-                          <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">
-                            {recipe.category}
-                          </span>
-                        )}
-                        <h3 className="font-serif text-lg font-bold mt-3 mb-2 pr-8">
-                          {recipe.title}
-                        </h3>
+                        <Link href={`/recipe/${recipe.id}`}>
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {recipe.category && (
+                              <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">
+                                {recipe.category}
+                              </span>
+                            )}
+                            {recipe.tags && recipe.tags.length > 0 && (
+                              <>
+                                {recipe.tags.slice(0, 2).map((tag) => (
+                                  <span
+                                    key={tag.id}
+                                    className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full"
+                                  >
+                                    {tag.name}
+                                  </span>
+                                ))}
+                                {recipe.tags.length > 2 && (
+                                  <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                                    +{recipe.tags.length - 2}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          <h3 className="font-serif text-lg font-bold mb-2">
+                            {recipe.title}
+                          </h3>
                         {recipe.description && (
                           <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
                             {recipe.description}
@@ -356,6 +540,7 @@ export default function DashboardPage() {
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}

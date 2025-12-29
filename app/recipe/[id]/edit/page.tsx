@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, CardContent } from "@/components/ui";
-import { Recipe, RecipeStep, RecipeIngredient } from "@/lib/types";
+import TagSelector from "@/components/TagSelector";
+import { Recipe, RecipeStep, RecipeIngredient, Tag } from "@/lib/types";
 import { 
   ChefHat, 
   ArrowLeft, 
@@ -19,6 +20,8 @@ export default function EditRecipePage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [steps, setSteps] = useState<RecipeStep[]>([]);
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -27,14 +30,35 @@ export default function EditRecipePage() {
 
   const loadRecipe = useCallback(async () => {
     try {
+      // Load recipe with tags
       const { data: recipeData, error: recipeError } = await supabase
         .from("recipes")
-        .select("*")
+        .select(`
+          *,
+          recipe_tags (
+            tag:tags (*)
+          )
+        `)
         .eq("id", id)
         .single();
 
       if (recipeError) throw recipeError;
-      setRecipe(recipeData);
+      
+      // Transform to include tags array
+      const recipeWithTags = {
+        ...recipeData,
+        tags: recipeData.recipe_tags?.map((rt: any) => rt.tag) || [],
+      };
+      setRecipe(recipeWithTags);
+      setSelectedTagIds(recipeWithTags.tags?.map((tag: Tag) => tag.id) || []);
+
+      // Load all available tags
+      const { data: allTags } = await supabase
+        .from("tags")
+        .select("*")
+        .order("category", { ascending: true })
+        .order("name", { ascending: true });
+      if (allTags) setTags(allTags);
 
       const { data: stepsData } = await supabase
         .from("recipe_steps")
@@ -69,6 +93,17 @@ export default function EditRecipePage() {
     setError("");
 
     try {
+      // Parse time strings to minutes
+      const parseTimeToMinutes = (timeStr: string | null): number | null => {
+        if (!timeStr) return null;
+        const hourMatch = timeStr.match(/(\d+)\s*h/i);
+        const minMatch = timeStr.match(/(\d+)\s*m/i);
+        const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
+        const minutes = minMatch ? parseInt(minMatch[1]) : 0;
+        const total = hours * 60 + minutes;
+        return total > 0 ? total : null;
+      };
+
       // Update recipe
       const { error: recipeError } = await supabase
         .from("recipes")
@@ -76,13 +111,32 @@ export default function EditRecipePage() {
           title: recipe.title,
           description: recipe.description,
           category: recipe.category,
+          image_url: recipe.image_url,
           servings: recipe.servings,
           prep_time: recipe.prep_time,
           cook_time: recipe.cook_time,
+          prep_time_minutes: parseTimeToMinutes(recipe.prep_time),
+          cook_time_minutes: parseTimeToMinutes(recipe.cook_time),
         })
         .eq("id", id);
 
       if (recipeError) throw recipeError;
+
+      // Update tags
+      // Delete existing tags
+      await supabase.from("recipe_tags").delete().eq("recipe_id", id);
+      // Insert new tags
+      if (selectedTagIds.length > 0) {
+        const { error: tagsError } = await supabase
+          .from("recipe_tags")
+          .insert(
+            selectedTagIds.map((tagId) => ({
+              recipe_id: id,
+              tag_id: tagId,
+            }))
+          );
+        if (tagsError) throw tagsError;
+      }
 
       // Delete existing steps and ingredients
       await supabase.from("recipe_steps").delete().eq("recipe_id", id);
@@ -247,12 +301,36 @@ export default function EditRecipePage() {
                   onChange={(e) => setRecipe({ ...recipe, description: e.target.value })}
                 />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  Cover Image URL
+                </label>
+                <Input
+                  id="image_url"
+                  placeholder="https://example.com/recipe-image.jpg"
+                  value={recipe.image_url || ""}
+                  onChange={(e) => setRecipe({ ...recipe, image_url: e.target.value })}
+                />
+                {recipe.image_url && (
+                  <div className="mt-3 rounded-xl overflow-hidden">
+                    <img
+                      src={recipe.image_url}
+                      alt="Recipe preview"
+                      className="w-full h-48 object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <Input
                   id="category"
                   label="Category"
                   value={recipe.category || ""}
                   onChange={(e) => setRecipe({ ...recipe, category: e.target.value })}
+                  placeholder="e.g., Dinner, Breakfast, Lunch"
                 />
                 <Input
                   id="servings"
@@ -273,6 +351,13 @@ export default function EditRecipePage() {
                   onChange={(e) => setRecipe({ ...recipe, cook_time: e.target.value })}
                 />
               </div>
+
+              {/* Tags */}
+              <TagSelector
+                availableTags={tags}
+                selectedTagIds={selectedTagIds}
+                onSelectionChange={setSelectedTagIds}
+              />
             </CardContent>
           </Card>
 

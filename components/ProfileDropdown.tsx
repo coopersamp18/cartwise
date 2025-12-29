@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Dropdown, DropdownItem, DropdownSeparator } from "@/components/ui/Dropdown";
 import { Profile } from "@/lib/types";
@@ -13,6 +13,7 @@ export function ProfileDropdown() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
 
   useEffect(() => {
@@ -88,7 +89,11 @@ export function ProfileDropdown() {
         {/* Menu items */}
         <DropdownItem
           onClick={() => router.push("/dashboard/settings")}
-          className="flex items-center gap-3"
+          className={`flex items-center gap-3 ${
+            pathname === "/dashboard/settings" 
+              ? "bg-primary/10 text-primary font-medium" 
+              : ""
+          }`}
         >
           <User className="w-4 h-4" />
           <span>Profile</span>
@@ -96,7 +101,11 @@ export function ProfileDropdown() {
 
         <DropdownItem
           onClick={handleSubscriptionManagement}
-          className="flex items-center gap-3"
+          className={`flex items-center gap-3 ${
+            pathname === "/dashboard/subscription" 
+              ? "bg-primary/10 text-primary font-medium" 
+              : ""
+          }`}
         >
           <CreditCard className="w-4 h-4" />
           <span>Subscription</span>

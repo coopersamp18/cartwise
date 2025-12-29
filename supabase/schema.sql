@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS recipes (
   description TEXT,
   category TEXT,
   source_url TEXT,
+  image_url TEXT,
   servings TEXT,
   prep_time TEXT,
   cook_time TEXT,
