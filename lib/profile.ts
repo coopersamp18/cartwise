@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { Profile } from "./types";
+import { mapUserToProfile } from "./profile-utils";
 
 /**
  * Get the profile for a user (client-side) from auth metadata
@@ -13,18 +14,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     return null;
   }
 
-  // Extract profile data from user metadata
-  const metadata = user.user_metadata || {};
-  
-  return {
-    id: user.id,
-    user_id: user.id,
-    full_name: metadata.full_name || null,
-    avatar_url: metadata.avatar_url || null,
-    preferences: metadata.preferences || null,
-    created_at: user.created_at,
-    updated_at: user.updated_at || user.created_at,
-  };
+  return mapUserToProfile(user);
 }
 
 /**

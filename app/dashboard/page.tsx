@@ -4,10 +4,12 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, Tooltip } from "@/components/ui";
+import { Button, Card, CardContent, Tooltip } from "@/components/ui";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 import RecipeFiltersComponent, { RecipeFilters } from "@/components/RecipeFilters";
 import { Recipe, ShoppingListItem, Subscription, Tag } from "@/lib/types";
+import { parseTimeToMinutes } from "@/lib/time";
+import { toggleRecipeSelectionWithShoppingList } from "@/lib/recipe-selection";
 import { 
   ChefHat, 
   Plus, 
@@ -60,6 +62,8 @@ export default function DashboardPage() {
   });
   const [showArchived, setShowArchived] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"recipes" | "shopping">("recipes");
   const router = useRouter();
   const supabase = createClient();
 
@@ -73,46 +77,45 @@ export default function DashboardPage() {
 
   const loadData = useCallback(async () => {
     try {
-      // Load recipes with tags
-      const { data: recipesData } = await supabase
-        .from("recipes")
-        .select(`
-          *,
-          recipe_tags (
-            tag:tags (*)
+      const [recipesResult, tagsResult, shoppingResult] = await Promise.all([
+        supabase
+          .from("recipes")
+          .select(
+            `
+              *,
+              recipe_tags (
+                tag:tags (*)
+              )
+            `
           )
-        `)
-        .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("tags")
+          .select("*")
+          .order("category", { ascending: true })
+          .order("name", { ascending: true }),
+        supabase
+          .from("shopping_list")
+          .select("*")
+          .order("aisle_category", { ascending: true }),
+      ]);
 
+      const recipesData = recipesResult.data;
       if (recipesData) {
-        // Transform recipes to include tags array
         const recipesWithTags = recipesData.map((recipe: any) => ({
           ...recipe,
-          is_archived: recipe.is_archived ?? false, // Ensure boolean, default to false
+          is_archived: recipe.is_archived ?? false,
           tags: recipe.recipe_tags?.map((rt: any) => rt.tag) || [],
         }));
         setAllRecipes(recipesWithTags);
       }
 
-      // Load tags
-      const { data: tagsData } = await supabase
-        .from("tags")
-        .select("*")
-        .order("category", { ascending: true })
-        .order("name", { ascending: true });
-
-      if (tagsData) {
-        setTags(tagsData);
+      if (tagsResult.data) {
+        setTags(tagsResult.data);
       }
 
-      // Load shopping list
-      const { data: shoppingData } = await supabase
-        .from("shopping_list")
-        .select("*")
-        .order("aisle_category", { ascending: true });
-
-      if (shoppingData) {
-        setShoppingList(shoppingData);
+      if (shoppingResult.data) {
+        setShoppingList(shoppingResult.data);
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -208,18 +211,6 @@ export default function DashboardPage() {
     setRecipes(filtered);
   }, [allRecipes, filters, showArchived, showFavorites]);
 
-  // Helper function to parse time strings to minutes
-  const parseTimeToMinutes = (timeStr: string | null): number | null => {
-    if (!timeStr) return null;
-    // Try to parse formats like "30 min", "1 hour", "1h 30m", etc.
-    const hourMatch = timeStr.match(/(\d+)\s*h/i);
-    const minMatch = timeStr.match(/(\d+)\s*m/i);
-    const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
-    const minutes = minMatch ? parseInt(minMatch[1]) : 0;
-    const total = hours * 60 + minutes;
-    return total > 0 ? total : null;
-  };
-
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -254,42 +245,12 @@ export default function DashboardPage() {
 
 
   const toggleRecipeSelection = async (recipeId: string, isSelected: boolean) => {
-    // Update recipe selection
-    await supabase
-      .from("recipes")
-      .update({ is_selected: !isSelected })
-      .eq("id", recipeId);
-
-    if (!isSelected) {
-      // Add ingredients to shopping list
-      const { data: ingredients } = await supabase
-        .from("recipe_ingredients")
-        .select("*")
-        .eq("recipe_id", recipeId);
-
-      if (ingredients && ingredients.length > 0) {
-        const { data: { user } } = await supabase.auth.getUser();
-        const shoppingItems = ingredients.map((ing) => ({
-          user_id: user?.id,
-          recipe_id: recipeId,
-          ingredient_id: ing.id,
-          name: ing.name,
-          quantity: ing.quantity,
-          aisle_category: ing.aisle_category,
-          checked: false,
-        }));
-
-        await supabase.from("shopping_list").insert(shoppingItems);
-      }
-    } else {
-      // Remove ingredients from shopping list
-      await supabase
-        .from("shopping_list")
-        .delete()
-        .eq("recipe_id", recipeId);
+    try {
+      await toggleRecipeSelectionWithShoppingList({ supabase, recipeId, isSelected });
+      await loadData();
+    } catch (error) {
+      console.error("Error toggling recipe selection:", error);
     }
-
-    loadData();
   };
 
   const toggleShoppingItem = async (itemId: string, checked: boolean) => {
@@ -378,21 +339,20 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <nav className="flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-border">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-center">
           <Link href="/dashboard" className="flex items-center gap-2">
             <ChefHat className="w-8 h-8 text-primary" />
             <span className="font-serif text-xl font-bold">Cartwise</span>
           </Link>
-          <ProfileDropdown />
         </div>
       </nav>
 
       {/* Trial Banner */}
       {subscription?.status === "trial" && trialDaysRemaining > 0 && showTrialBanner && (
-        <div className="bg-primary/10 border-b border-primary/20">
+        <div className="flex-shrink-0 bg-primary/10 border-b border-primary/20">
           <div className="max-w-6xl mx-auto px-6 py-3 relative">
             <p className="text-sm text-center pr-8">
               <strong>Free Trial Active:</strong> You have {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""} remaining. 
@@ -413,76 +373,34 @@ export default function DashboardPage() {
       )}
 
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        <Tabs defaultValue="recipes" className="w-full">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <TabsList>
-              <TabsTrigger value="recipes">
-                <BookOpen className="w-4 h-4 mr-2" />
-                Recipes
-              </TabsTrigger>
-              <TabsTrigger value="shopping">
-                <ShoppingCart className="w-4 h-4 mr-2" />
-                Shopping List
-                {shoppingList.length > 0 && (
-                  <span className="ml-2 bg-primary text-white text-xs px-2 py-0.5 rounded-full">
-                    {shoppingList.filter((i) => !i.checked).length}
-                  </span>
-                )}
-              </TabsTrigger>
-            </TabsList>
+      <main className="flex flex-1 min-h-0">
+        {/* Filters Sidebar */}
+        <div className="flex-shrink-0">
+          <RecipeFiltersComponent
+            tags={tags}
+            filters={filters}
+            onFiltersChange={setFilters}
+            isOpen={filtersOpen}
+            onToggle={() => setFiltersOpen(!filtersOpen)}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            showFavorites={showFavorites}
+            onToggleFavorites={() => setShowFavorites(!showFavorites)}
+            showArchived={showArchived}
+            onToggleArchived={() => {
+              console.log('Toggling showArchived from', showArchived, 'to', !showArchived);
+              setShowArchived(!showArchived);
+            }}
+            shoppingListCount={shoppingList.filter((i) => !i.checked).length}
+          />
+        </div>
 
-            <Link href="/recipe/new">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                New Recipe
-              </Button>
-            </Link>
-          </div>
-
-          {/* Recipes Tab */}
-          <TabsContent value="recipes">
-            <div className="mb-6">
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div className="flex-1">
-                  <RecipeFiltersComponent
-                    tags={tags}
-                    filters={filters}
-                    onFiltersChange={setFilters}
-                  />
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <Button
-                    variant={showFavorites ? "primary" : "secondary"}
-                    size="sm"
-                    onClick={() => setShowFavorites(!showFavorites)}
-                  >
-                    <Star className={`w-4 h-4 mr-2 ${showFavorites ? "fill-current" : ""}`} />
-                    {showFavorites ? "All Recipes" : "Favorites"}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      console.log('Toggling showArchived from', showArchived, 'to', !showArchived);
-                      setShowArchived(!showArchived);
-                    }}
-                  >
-                    {showArchived ? (
-                      <>
-                        <ArchiveRestore className="w-4 h-4 mr-2" />
-                        Show Active
-                      </>
-                    ) : (
-                      <>
-                        <Archive className="w-4 h-4 mr-2" />
-                        Show Archived
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto px-6 py-8">
+            {/* Recipes Tab */}
+            {activeTab === "recipes" && (
+              <>
             {recipes.length === 0 ? (
               <Card>
                 <CardContent className="py-16 text-center">
@@ -511,28 +429,53 @@ export default function DashboardPage() {
                   <Card 
                     key={recipe.id} 
                     variant="interactive"
-                    className={`relative flex flex-col ${recipe.is_selected ? "ring-2 ring-primary" : ""}`}
+                    className={`relative flex flex-col h-full overflow-hidden ${recipe.is_selected ? "ring-2 ring-primary" : ""}`}
                   >
-                    <CardContent className="p-0 relative flex flex-col flex-1">
-                      {/* Recipe Image */}
-                      {recipe.image_url && (
-                        <Link href={`/recipe/${recipe.id}`}>
-                          <div className="relative w-full h-48 overflow-hidden rounded-t-xl">
-                            <img
-                              src={recipe.image_url}
-                              alt={recipe.title}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                              }}
-                            />
-                          </div>
-                        </Link>
-                      )}
-                      
-                      <div className="p-6 flex flex-col flex-1 min-h-0">
-                        {/* Action buttons - below image, aligned to the right */}
-                        <div className="flex items-center justify-end gap-2 mb-4">
+                    {/* Recipe Image */}
+                    {recipe.image_url && (
+                      <Link 
+                        href={`/recipe/${recipe.id}`} 
+                        className="block w-full aspect-[4/3] overflow-hidden bg-muted"
+                      >
+                        <img
+                          src={recipe.image_url}
+                          alt={recipe.title}
+                          className="w-full h-full object-cover"
+                          style={{ display: 'block', margin: 0, padding: 0, lineHeight: 0 }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </Link>
+                    )}
+                    
+                    <CardContent className="p-6 relative flex flex-col flex-1 gap-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex flex-wrap gap-2">
+                          {recipe.category && (
+                            <span className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full leading-none">
+                              {recipe.category}
+                            </span>
+                          )}
+                          {recipe.tags && recipe.tags.length > 0 && (
+                            <>
+                              {recipe.tags.slice(0, 2).map((tag) => (
+                                <span
+                                  key={tag.id}
+                                  className="text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full leading-none"
+                                >
+                                  {tag.name}
+                                </span>
+                              ))}
+                              {recipe.tags.length > 2 && (
+                                <span className="text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full leading-none">
+                                  +{recipe.tags.length - 2}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 -mr-2">
                           <Tooltip 
                             content={recipe.is_favorited ? "Remove from favorites" : "Add to favorites"}
                             position="top"
@@ -574,43 +517,19 @@ export default function DashboardPage() {
                             </button>
                           </Tooltip>
                         </div>
+                      </div>
 
-                        <Link href={`/recipe/${recipe.id}`} className="flex-1 flex flex-col">
-                          <div className="flex flex-wrap gap-2 mb-2">
-                            {recipe.category && (
-                              <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">
-                                {recipe.category}
-                              </span>
-                            )}
-                            {recipe.tags && recipe.tags.length > 0 && (
-                              <>
-                                {recipe.tags.slice(0, 2).map((tag) => (
-                                  <span
-                                    key={tag.id}
-                                    className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full"
-                                  >
-                                    {tag.name}
-                                  </span>
-                                ))}
-                                {recipe.tags.length > 2 && (
-                                  <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full">
-                                    +{recipe.tags.length - 2}
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          <h3 className="font-serif text-lg font-bold mb-2">
-                            {recipe.title}
-                          </h3>
-                          {recipe.description ? (
-                            <p className="text-sm text-muted-foreground line-clamp-2 mb-4 flex-1">
-                              {recipe.description}
-                            </p>
-                          ) : (
-                            <div className="flex-1"></div>
-                          )}
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-auto">
+                      <Link href={`/recipe/${recipe.id}`} className="flex-1 flex flex-col gap-3 min-h-0">
+                        <h3 className="font-serif text-lg font-bold">
+                          {recipe.title}
+                        </h3>
+                        {recipe.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {recipe.description}
+                          </p>
+                        )}
+                        <div className="mt-auto flex items-center justify-between gap-4 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-4">
                             {recipe.prep_time && (
                               <span className="flex items-center gap-1">
                                 <Clock className="w-4 h-4" />
@@ -624,52 +543,51 @@ export default function DashboardPage() {
                               </span>
                             )}
                           </div>
-                        </Link>
-                      </div>
-
-                      {/* Archive/Delete button - bottom right of card */}
-                      <div className="absolute bottom-6 right-6 z-10">
-                        {showArchived ? (
-                          // Show delete button when viewing archived recipes
-                          <Tooltip content="Delete recipe">
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                deleteRecipe(recipe.id);
-                              }}
-                              className="p-2 hover:bg-red-50 rounded-lg transition-colors text-muted-foreground hover:text-red-500"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </Tooltip>
-                        ) : (
-                          // Show archive button when viewing active recipes
-                          <Tooltip content={recipe.is_archived ? "Unarchive recipe" : "Archive recipe"}>
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                toggleArchive(recipe.id, recipe.is_archived || false);
-                              }}
-                              className="p-2 hover:bg-muted rounded-lg transition-colors text-muted-foreground"
-                            >
-                              {recipe.is_archived ? (
-                                <ArchiveRestore className="w-4 h-4" />
-                              ) : (
-                                <Archive className="w-4 h-4" />
-                              )}
-                            </button>
-                          </Tooltip>
-                        )}
-                      </div>
+                          {/* Archive/Delete button */}
+                          {showArchived ? (
+                            <Tooltip content="Delete recipe">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  deleteRecipe(recipe.id);
+                                }}
+                                className="p-2 hover:bg-red-50 rounded-lg transition-colors text-muted-foreground hover:text-red-500"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </Tooltip>
+                          ) : (
+                            <Tooltip content={recipe.is_archived ? "Unarchive recipe" : "Archive recipe"}>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleArchive(recipe.id, recipe.is_archived || false);
+                                }}
+                                className="p-2 hover:bg-muted rounded-lg transition-colors text-muted-foreground"
+                              >
+                                {recipe.is_archived ? (
+                                  <ArchiveRestore className="w-4 h-4" />
+                                ) : (
+                                  <Archive className="w-4 h-4" />
+                                )}
+                              </button>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </Link>
                     </CardContent>
                   </Card>
                 ))}
               </div>
             )}
-          </TabsContent>
+              </>
+            )}
 
-          {/* Shopping List Tab */}
-          <TabsContent value="shopping">
+            {/* Shopping List Tab */}
+            {activeTab === "shopping" && (
+              <>
             {shoppingList.length === 0 ? (
               <Card>
                 <CardContent className="py-16 text-center">
@@ -739,8 +657,10 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
-          </TabsContent>
-        </Tabs>
+              </>
+            )}
+          </div>
+        </div>
       </main>
     </div>
   );

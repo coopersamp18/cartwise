@@ -1,6 +1,24 @@
 import { NextResponse } from "next/server";
-import { parseRecipeFromText, parseRecipeFromUrl } from "@/lib/openai";
+import { parseRecipeFromText, parseRecipeFromUrl, ParsedRecipe } from "@/lib/openai";
 import { calculateNutritionFromIngredients, parseServings } from "@/lib/nutrition";
+
+async function applyNutritionFallback(recipe: ParsedRecipe) {
+  if (!recipe.nutrition && recipe.ingredients && recipe.ingredients.length > 0) {
+    const servings = parseServings(recipe.servings);
+    const calculatedNutrition = await calculateNutritionFromIngredients(
+      recipe.ingredients.map((ing) => ({
+        name: ing.name,
+        quantity: ing.quantity || "1",
+        unit: ing.unit || "unit",
+      })),
+      servings
+    );
+    if (calculatedNutrition) {
+      recipe.nutrition = calculatedNutrition;
+    }
+  }
+  return recipe;
+}
 
 export async function POST(request: Request) {
   try {
@@ -17,13 +35,18 @@ export async function POST(request: Request) {
 
       // Fetch the webpage content
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10_000); // 10s ceiling for slow sites
+
         const response = await fetch(url, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
           },
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           return NextResponse.json(
@@ -42,24 +65,9 @@ export async function POST(request: Request) {
         }
 
         const recipe = await parseRecipeFromUrl(url, htmlContent);
+        const withNutrition = await applyNutritionFallback(recipe);
         
-        // If nutrition data wasn't extracted, calculate it from ingredients
-        if (!recipe.nutrition && recipe.ingredients && recipe.ingredients.length > 0) {
-          const servings = parseServings(recipe.servings);
-          const calculatedNutrition = await calculateNutritionFromIngredients(
-            recipe.ingredients.map(ing => ({
-              name: ing.name,
-              quantity: ing.quantity || "1",
-              unit: ing.unit || "unit"
-            })),
-            servings
-          );
-          if (calculatedNutrition) {
-            recipe.nutrition = calculatedNutrition;
-          }
-        }
-        
-        return NextResponse.json(recipe);
+        return NextResponse.json(withNutrition);
       } catch (error) {
         console.error("Fetch error:", error);
         return NextResponse.json(
@@ -76,24 +84,9 @@ export async function POST(request: Request) {
       }
 
       const recipe = await parseRecipeFromText(text);
+      const withNutrition = await applyNutritionFallback(recipe);
       
-      // If nutrition data wasn't extracted, calculate it from ingredients
-      if (!recipe.nutrition && recipe.ingredients && recipe.ingredients.length > 0) {
-        const servings = parseServings(recipe.servings);
-        const calculatedNutrition = await calculateNutritionFromIngredients(
-          recipe.ingredients.map(ing => ({
-            name: ing.name,
-            quantity: ing.quantity || "1",
-            unit: ing.unit || "unit"
-          })),
-          servings
-        );
-        if (calculatedNutrition) {
-          recipe.nutrition = calculatedNutrition;
-        }
-      }
-      
-      return NextResponse.json(recipe);
+      return NextResponse.json(withNutrition);
     } else {
       return NextResponse.json(
         { error: "Invalid mode" },

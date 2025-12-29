@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import TagSelector from "@/components/TagSelector";
 import { Recipe, RecipeStep, RecipeIngredient, Tag } from "@/lib/types";
+import { parseTimeToMinutes } from "@/lib/time";
 import { 
   ChefHat, 
   ArrowLeft, 
@@ -93,17 +94,6 @@ export default function EditRecipePage() {
     setError("");
 
     try {
-      // Parse time strings to minutes
-      const parseTimeToMinutes = (timeStr: string | null): number | null => {
-        if (!timeStr) return null;
-        const hourMatch = timeStr.match(/(\d+)\s*h/i);
-        const minMatch = timeStr.match(/(\d+)\s*m/i);
-        const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
-        const minutes = minMatch ? parseInt(minMatch[1]) : 0;
-        const total = hours * 60 + minutes;
-        return total > 0 ? total : null;
-      };
-
       // Update recipe
       const { error: recipeError } = await supabase
         .from("recipes")

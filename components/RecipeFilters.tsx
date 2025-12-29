@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Button, Card, CardContent } from "./ui";
+import Link from "next/link";
 import { Tag, RecipeCategory } from "@/lib/types";
-import { X, Filter, Clock } from "lucide-react";
+import { Button } from "./ui";
+import { ProfileDropdown } from "./ProfileDropdown";
+import { X, Filter, Clock, BookOpen, ShoppingCart, Star, Archive, ArchiveRestore, Plus, PanelLeft } from "lucide-react";
 
 export interface RecipeFilters {
   category: RecipeCategory | null;
@@ -17,6 +18,16 @@ interface RecipeFiltersProps {
   tags: Tag[];
   filters: RecipeFilters;
   onFiltersChange: (filters: RecipeFilters) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+  // Toolbar controls
+  activeTab: "recipes" | "shopping";
+  onTabChange: (tab: "recipes" | "shopping") => void;
+  showFavorites: boolean;
+  onToggleFavorites: () => void;
+  showArchived: boolean;
+  onToggleArchived: () => void;
+  shoppingListCount?: number;
 }
 
 const CATEGORIES: RecipeCategory[] = [
@@ -45,8 +56,16 @@ export default function RecipeFiltersComponent({
   tags,
   filters,
   onFiltersChange,
+  isOpen,
+  onToggle,
+  activeTab,
+  onTabChange,
+  showFavorites,
+  onToggleFavorites,
+  showArchived,
+  onToggleArchived,
+  shoppingListCount = 0,
 }: RecipeFiltersProps) {
-  const [isOpen, setIsOpen] = useState(false);
 
   const updateFilter = <K extends keyof RecipeFilters>(
     key: K,
@@ -80,162 +99,343 @@ export default function RecipeFiltersComponent({
     (filters.totalTimeMax ? 1 : 0);
 
   return (
-    <div className="mb-6">
-      <div className="flex items-center gap-3 mb-4">
-        <Button
-          variant="secondary"
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2"
-        >
-          <Filter className="w-4 h-4" />
-          Filters
-          {activeFilterCount > 0 && (
-            <span className="bg-primary text-white text-xs px-2 py-0.5 rounded-full">
-              {activeFilterCount}
-            </span>
+    <div
+      className={`h-full bg-background border-r border-border transition-all duration-300 ease-in-out flex-shrink-0 flex flex-col relative ${
+        isOpen ? "w-64" : "w-16"
+      }`}
+    >
+      {/* Toolbar */}
+      <div className="flex-shrink-0 p-3 border-b border-border flex flex-col h-full">
+        {/* Top Section - Always visible */}
+        <div className="space-y-2 flex-shrink-0">
+          {/* Filter Toggle - Sidebar icon */}
+          <button
+            onClick={onToggle}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg transition-colors ${
+              isOpen
+                ? "bg-muted hover:bg-muted/80"
+                : "hover:bg-muted/50"
+            }`}
+            title={isOpen ? "Close sidebar" : "Open sidebar"}
+          >
+            {/* Custom sidebar/filter panel icon */}
+            <svg
+              className={`w-5 h-5 ${isOpen ? "text-foreground" : "text-muted-foreground"}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="7" height="18" rx="1" />
+              <rect x="14" y="3" width="7" height="18" rx="1" />
+              <line x1="10" y1="8" x2="10" y2="8" />
+              <line x1="10" y1="12" x2="10" y2="12" />
+            </svg>
+            {isOpen && (
+              <span className="text-sm font-medium">Filters</span>
+            )}
+          </button>
+
+          {/* New Recipe Button - At top */}
+          <Link href="/recipe/new" className="block">
+            <button
+              className={`w-full flex items-center justify-center gap-2 rounded-lg bg-primary text-white hover:bg-primary-dark transition-colors ${
+                isOpen ? "px-3 py-2 text-sm font-medium" : "p-2.5"
+              }`}
+              title="New Recipe"
+            >
+              <Plus className="w-5 h-5" />
+              {isOpen && "New Recipe"}
+            </button>
+          </Link>
+
+          {/* Tabs - Show opposite tab icon when minimized */}
+          {isOpen ? (
+            <div className="flex gap-1 p-1 bg-muted rounded-lg">
+              <button
+                onClick={() => onTabChange("recipes")}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "recipes"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                Recipes
+              </button>
+              <button
+                onClick={() => onTabChange("shopping")}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors relative ${
+                  activeTab === "shopping"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Shopping List
+                {shoppingListCount > 0 && (
+                  <span className="bg-primary text-white text-xs px-1.5 py-0.5 rounded-full">
+                    {shoppingListCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => onTabChange(activeTab === "recipes" ? "shopping" : "recipes")}
+              className="w-full p-2.5 rounded-lg transition-colors hover:bg-muted/50 text-muted-foreground relative"
+              title={activeTab === "recipes" ? "Switch to Shopping List" : "Switch to Recipes"}
+            >
+              {activeTab === "recipes" ? (
+                <>
+                  <ShoppingCart className="w-5 h-5" />
+                  {shoppingListCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-primary text-white text-xs px-1.5 py-0.5 rounded-full">
+                      {shoppingListCount}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <BookOpen className="w-5 h-5" />
+              )}
+            </button>
           )}
-        </Button>
-        {activeFilterCount > 0 && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            <X className="w-4 h-4 mr-1" />
-            Clear
-          </Button>
+
+          {/* Favorites Button */}
+          <button
+            onClick={onToggleFavorites}
+            className={`w-full flex items-center justify-center gap-2 rounded-lg transition-colors ${
+              isOpen ? "px-3 py-2 text-sm font-medium" : "p-2.5"
+            } ${
+              showFavorites
+                ? "bg-muted hover:bg-muted/80"
+                : "hover:bg-muted/50"
+            }`}
+            title={showFavorites ? "Show All Recipes" : "Show Favorites"}
+          >
+            <Star className={`w-5 h-5 ${showFavorites ? "fill-current" : ""}`} />
+            {isOpen && (
+              <span>{showFavorites ? "All Recipes" : "Favorites"}</span>
+            )}
+          </button>
+        </div>
+
+        {/* Middle Section - Scrollable Filters */}
+        {isOpen && (
+          <div className="flex-1 overflow-y-auto min-h-0 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent overflow-x-hidden">
+            <div className="p-4 space-y-6">
+              {/* Category Filter */}
+              <div>
+                <label className="text-sm font-medium mb-3 block">Category</label>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIES.map((category) => (
+                    <button
+                      key={category}
+                      onClick={() =>
+                        updateFilter("category", filters.category === category ? null : category)
+                      }
+                      className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                        filters.category === category
+                          ? "bg-primary text-white"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Time Filters */}
+              <div className="space-y-4">
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium mb-3">
+                    <Clock className="w-4 h-4" />
+                    Prep Time (max)
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {TIME_RANGES.map((range) => (
+                      <button
+                        key={range.value}
+                        onClick={() =>
+                          updateFilter(
+                            "prepTimeMax",
+                            filters.prepTimeMax === range.value ? null : range.value
+                          )
+                        }
+                        className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                          filters.prepTimeMax === range.value
+                            ? "bg-primary text-white"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        }`}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-3 block">
+                    Cook Time (max)
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {TIME_RANGES.map((range) => (
+                      <button
+                        key={range.value}
+                        onClick={() =>
+                          updateFilter(
+                            "cookTimeMax",
+                            filters.cookTimeMax === range.value ? null : range.value
+                          )
+                        }
+                        className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                          filters.cookTimeMax === range.value
+                            ? "bg-primary text-white"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        }`}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-3 block">
+                    Total Time (max)
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {TIME_RANGES.map((range) => (
+                      <button
+                        key={range.value}
+                        onClick={() =>
+                          updateFilter(
+                            "totalTimeMax",
+                            filters.totalTimeMax === range.value ? null : range.value
+                          )
+                        }
+                        className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                          filters.totalTimeMax === range.value
+                            ? "bg-primary text-white"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        }`}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Dietary Tags Filter */}
+              {tags.length > 0 && (
+                <div>
+                  <label className="text-sm font-medium mb-3 block">
+                    Dietary & Preferences
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map((tag) => (
+                      <button
+                        key={tag.id}
+                        onClick={() => toggleTag(tag.id)}
+                        className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                          filters.tags.includes(tag.id)
+                            ? "bg-primary text-white"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        }`}
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Show Archived - At bottom of filter section */}
+              <div className="pt-4 border-t border-border">
+                <button
+                  onClick={onToggleArchived}
+                  className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+                    showArchived
+                      ? "bg-muted hover:bg-muted/80"
+                      : "hover:bg-muted/50"
+                  }`}
+                  title={showArchived ? "Show Active" : "Show Archived"}
+                >
+                  {showArchived ? (
+                    <ArchiveRestore className="w-4 h-4" />
+                  ) : (
+                    <Archive className="w-4 h-4" />
+                  )}
+                  <span>{showArchived ? "Show Active" : "Show Archived"}</span>
+                </button>
+              </div>
+
+              {/* Clear Filters Button */}
+              {activeFilterCount > 0 && (
+                <div className="pt-2">
+                  <Button
+                    variant="secondary"
+                    onClick={clearFilters}
+                    className="w-full"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Clear All Filters
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
+
+        {/* Profile at bottom - Sticky */}
+        <div className="flex-shrink-0 pt-2 border-t border-border bg-background relative z-50">
+          <div className={`flex items-center justify-center ${isOpen ? "px-2" : ""}`}>
+            <ProfileDropdown />
+          </div>
+        </div>
       </div>
 
-      {isOpen && (
-        <Card>
-          <CardContent className="p-6 space-y-6">
-            {/* Category Filter */}
-            <div>
-              <label className="text-sm font-medium mb-3 block">Category</label>
-              <div className="flex flex-wrap gap-2">
-                {CATEGORIES.map((category) => (
-                  <button
-                    key={category}
-                    onClick={() =>
-                      updateFilter("category", filters.category === category ? null : category)
-                    }
-                    className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                      filters.category === category
-                        ? "bg-primary text-white"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Time Filters */}
-            <div className="space-y-4">
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium mb-3">
-                  <Clock className="w-4 h-4" />
-                  Prep Time (max)
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {TIME_RANGES.map((range) => (
-                    <button
-                      key={range.value}
-                      onClick={() =>
-                        updateFilter(
-                          "prepTimeMax",
-                          filters.prepTimeMax === range.value ? null : range.value
-                        )
-                      }
-                      className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                        filters.prepTimeMax === range.value
-                          ? "bg-primary text-white"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-3 block">
-                  Cook Time (max)
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {TIME_RANGES.map((range) => (
-                    <button
-                      key={range.value}
-                      onClick={() =>
-                        updateFilter(
-                          "cookTimeMax",
-                          filters.cookTimeMax === range.value ? null : range.value
-                        )
-                      }
-                      className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                        filters.cookTimeMax === range.value
-                          ? "bg-primary text-white"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-3 block">
-                  Total Time (max)
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {TIME_RANGES.map((range) => (
-                    <button
-                      key={range.value}
-                      onClick={() =>
-                        updateFilter(
-                          "totalTimeMax",
-                          filters.totalTimeMax === range.value ? null : range.value
-                        )
-                      }
-                      className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                        filters.totalTimeMax === range.value
-                          ? "bg-primary text-white"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Dietary Tags Filter */}
-            {tags.length > 0 && (
-              <div>
-                <label className="text-sm font-medium mb-3 block">
-                  Dietary & Preferences
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <button
-                      key={tag.id}
-                      onClick={() => toggleTag(tag.id)}
-                      className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                        filters.tags.includes(tag.id)
-                          ? "bg-primary text-white"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
-                    >
-                      {tag.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
+  );
+}
+
+// Export button component separately - now just a simple toggle button
+export function RecipeFiltersButton({
+  filters,
+  onToggle,
+  isOpen,
+}: {
+  filters: RecipeFilters;
+  onToggle: () => void;
+  isOpen: boolean;
+}) {
+  const activeFilterCount =
+    (filters.category ? 1 : 0) +
+    filters.tags.length +
+    (filters.prepTimeMax ? 1 : 0) +
+    (filters.cookTimeMax ? 1 : 0) +
+    (filters.totalTimeMax ? 1 : 0);
+
+  return (
+    <button
+      onClick={onToggle}
+      className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+        isOpen
+          ? "bg-muted hover:bg-muted/80"
+          : "hover:bg-muted/50 border border-border"
+      }`}
+      title={isOpen ? "Close filters" : "Open filters"}
+    >
+      <Filter className="w-4 h-4" />
+      {activeFilterCount > 0 && (
+        <span className="bg-primary text-white text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+          {activeFilterCount}
+        </span>
+      )}
+    </button>
   );
 }

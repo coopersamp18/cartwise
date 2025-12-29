@@ -58,7 +58,7 @@ export async function updateSession(request: NextRequest) {
     // Check if user has an active subscription
     const { data: subscription } = await supabase
       .from("subscriptions")
-      .select("*")
+      .select("status,trial_ends_at,current_period_end")
       .eq("user_id", user.id)
       .single();
 

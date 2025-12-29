@@ -8,6 +8,7 @@ import { Button, Input, Card, CardContent } from "@/components/ui";
 import TagSelector from "@/components/TagSelector";
 import { ParsedRecipe } from "@/lib/openai";
 import { Tag } from "@/lib/types";
+import { parseTimeToMinutes } from "@/lib/time";
 import { 
   ChefHat, 
   ArrowLeft, 
@@ -86,17 +87,6 @@ export default function NewRecipePage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
-
-      // Parse time strings to minutes
-      const parseTimeToMinutes = (timeStr: string | null): number | null => {
-        if (!timeStr) return null;
-        const hourMatch = timeStr.match(/(\d+)\s*h/i);
-        const minMatch = timeStr.match(/(\d+)\s*m/i);
-        const hours = hourMatch ? parseInt(hourMatch[1]) : 0;
-        const minutes = minMatch ? parseInt(minMatch[1]) : 0;
-        const total = hours * 60 + minutes;
-        return total > 0 ? total : null;
-      };
 
       // Build base recipe data (always works)
       const baseRecipeData = {

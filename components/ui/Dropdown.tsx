@@ -19,7 +19,9 @@ export function Dropdown({
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isHoverable, setIsHoverable] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left?: number; right?: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Detect if device supports hover
@@ -35,12 +37,27 @@ export function Dropdown({
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, []);
 
+  // Calculate position when dropdown opens
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + 8,
+        ...(align === 'left' ? { left: rect.left } : { right: window.innerWidth - rect.right }),
+      });
+    } else {
+      setPosition(null);
+    }
+  }, [isOpen, align]);
+
   // Handle click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
         dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
+        triggerRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        !triggerRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false);
       }
@@ -105,26 +122,34 @@ export function Dropdown({
   };
 
   return (
-    <div
-      ref={dropdownRef}
-      className={`relative inline-block ${className}`}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      {...props}
-    >
-      <div onClick={handleClick} className="cursor-pointer">
-        {trigger}
+    <>
+      <div
+        ref={triggerRef}
+        className={`relative inline-block ${className}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        {...props}
+      >
+        <div onClick={handleClick} className="cursor-pointer">
+          {trigger}
+        </div>
       </div>
-      {isOpen && (
+      {isOpen && position && (
         <div
-          className={`absolute top-full mt-2 z-50 min-w-[200px] bg-card border border-border rounded-xl shadow-lg overflow-hidden ${alignClasses[align]}`}
+          ref={dropdownRef}
+          className="fixed z-[100] min-w-[200px] bg-card border border-border rounded-xl shadow-lg overflow-hidden"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
+          style={{
+            top: `${position.top}px`,
+            ...(position.left !== undefined ? { left: `${position.left}px` } : {}),
+            ...(position.right !== undefined ? { right: `${position.right}px` } : {}),
+          }}
         >
           {children}
         </div>
       )}
-    </div>
+    </>
   );
 }
 

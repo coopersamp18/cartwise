@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getSubscription, hasActiveSubscription } from "@/lib/subscription";
+// Subscription checks are done inline with the current Supabase client to avoid extra round trips
 import {
   createPolarClient,
   getPolarProductId,
@@ -22,7 +22,12 @@ export async function POST(request: Request) {
     }
 
     // Check if user has ever had a subscription (prevents multiple free trials)
-    const existingSubscription = await getSubscription(user.id);
+    const { data: existingSubscription } = await supabase
+      .from("subscriptions")
+      .select("status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     if (existingSubscription) {
       // User has already used their free trial - prevent creating a new checkout
       return NextResponse.json(

@@ -87,6 +87,16 @@ Note: Only include the "nutrition" object if it's explicitly provided in the rec
   return JSON.parse(content) as ParsedRecipe;
 }
 
+function sanitizeHtmlForModel(htmlContent: string): string {
+  // Strip scripts/styles to reduce token usage and noise
+  const withoutScripts = htmlContent.replace(/<script[\s\S]*?<\/script>/gi, "");
+  const withoutStyles = withoutScripts.replace(/<style[\s\S]*?<\/style>/gi, "");
+  const withoutComments = withoutStyles.replace(/<!--[\s\S]*?-->/g, "");
+  const collapsed = withoutComments.replace(/\s+/g, " ").trim();
+  // Cap to keep prompts small (~8k chars)
+  return collapsed.slice(0, 8000);
+}
+
 // Helper function to extract image URLs from HTML
 function extractImageUrls(htmlContent: string, baseUrl: string): string[] {
   const imageUrls: string[] = [];
@@ -157,12 +167,13 @@ function extractImageUrls(htmlContent: string, baseUrl: string): string[] {
 }
 
 export async function parseRecipeFromUrl(url: string, htmlContent: string): Promise<ParsedRecipe> {
-  // Extract image URLs from HTML
-  const imageUrls = extractImageUrls(htmlContent, url);
+  // Extract image URLs from HTML (limit to keep prompt compact)
+  const imageUrls = extractImageUrls(htmlContent, url).slice(0, 5);
+  const sanitizedHtml = sanitizeHtmlForModel(htmlContent);
   
   // Create image context for OpenAI
   const imageContext = imageUrls.length > 0
-    ? `\n\nFound ${imageUrls.length} potential recipe images. Image URLs:\n${imageUrls.slice(0, 10).map((img, i) => `${i + 1}. ${img}`).join('\n')}\n\nPlease identify the best recipe cover image URL (the main photo of the finished dish) and include it in the "imageUrl" field. If no suitable image is found, set "imageUrl" to null.`
+    ? `\n\nFound ${imageUrls.length} potential recipe images. Image URLs:\n${imageUrls.map((img, i) => `${i + 1}. ${img}`).join('\n')}\n\nPlease identify the best recipe cover image URL (the main photo of the finished dish) and include it in the "imageUrl" field. If no suitable image is found, set "imageUrl" to null.`
     : '\n\nNo images found in the HTML. Set "imageUrl" to null.';
 
   const response = await openai.chat.completions.create({
@@ -210,7 +221,7 @@ Note: Only include the "nutrition" object if it's explicitly provided in the rec
       },
       {
         role: "user",
-        content: `URL: ${url}\n\nHTML Content:\n${htmlContent.substring(0, 15000)}${imageContext}`
+        content: `URL: ${url}\n\nHTML Content (sanitized):\n${sanitizedHtml}${imageContext}`
       }
     ],
     response_format: { type: "json_object" },

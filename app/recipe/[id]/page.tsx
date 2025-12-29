@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button, Card, CardContent } from "@/components/ui";
 import NutritionTable from "@/components/NutritionTable";
 import { Recipe, RecipeStep, RecipeIngredient } from "@/lib/types";
+import { toggleRecipeSelectionWithShoppingList } from "@/lib/recipe-selection";
 import { 
   ChefHat, 
   ArrowLeft, 
@@ -80,32 +81,12 @@ export default function RecipePage() {
   const toggleSelection = async () => {
     if (!recipe) return;
 
-    await supabase
-      .from("recipes")
-      .update({ is_selected: !recipe.is_selected })
-      .eq("id", id);
-
-    if (!recipe.is_selected) {
-      // Add ingredients to shopping list
-      const { data: { user } } = await supabase.auth.getUser();
-      const shoppingItems = ingredients.map((ing) => ({
-        user_id: user?.id,
-        recipe_id: id,
-        ingredient_id: ing.id,
-        name: ing.name,
-        quantity: ing.quantity,
-        aisle_category: ing.aisle_category,
-        checked: false,
-      }));
-
-      await supabase.from("shopping_list").insert(shoppingItems);
-    } else {
-      // Remove from shopping list
-      await supabase
-        .from("shopping_list")
-        .delete()
-        .eq("recipe_id", id);
-    }
+    await toggleRecipeSelectionWithShoppingList({
+      supabase,
+      recipeId: id,
+      isSelected: recipe.is_selected,
+      ingredients,
+    });
 
     setRecipe({ ...recipe, is_selected: !recipe.is_selected });
   };
