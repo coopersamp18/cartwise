@@ -128,9 +128,8 @@ export default function DashboardPage() {
     // Filter by archived status
     // Treat null/undefined/false as not archived, only true values as archived
     const isRecipeArchived = (recipe: Recipe) => {
-      const archived = recipe.is_archived;
-      // Handle boolean true, string "true", or number 1
-      return archived === true || archived === "true" || archived === 1;
+      // is_archived is typed as boolean, so we only need to check for true
+      return recipe.is_archived === true;
     };
     
     // Debug: Log all recipe archived statuses
