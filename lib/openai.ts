@@ -91,7 +91,7 @@ Note: Only include the "nutrition" object if it's explicitly provided in the rec
 function extractImageUrls(htmlContent: string, baseUrl: string): string[] {
   const imageUrls: string[] = [];
   const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
-  const matches = htmlContent.matchAll(imgRegex);
+  const matches = Array.from(htmlContent.matchAll(imgRegex));
   
   for (const match of matches) {
     let imageUrl = match[1];

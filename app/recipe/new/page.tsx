@@ -112,8 +112,8 @@ export default function NewRecipePage() {
       };
 
       // Try to insert with new fields first (if migration has been run)
-      const prepMinutes = parseTimeToMinutes(parsedRecipe.prepTime);
-      const cookMinutes = parseTimeToMinutes(parsedRecipe.cookTime);
+      const prepMinutes = parseTimeToMinutes(parsedRecipe.prepTime ?? null);
+      const cookMinutes = parseTimeToMinutes(parsedRecipe.cookTime ?? null);
       
       let recipe;
       let recipeError;

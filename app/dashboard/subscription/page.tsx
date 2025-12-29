@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -14,7 +14,7 @@ import {
 import { ChefHat, CreditCard, Calendar, AlertCircle, CheckCircle, XCircle, ExternalLink, Loader2, FileText } from "lucide-react";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 
-export default function SubscriptionPage() {
+function SubscriptionPageContent() {
   const [user, setUser] = useState<{ id: string; email?: string | null } | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,6 +31,44 @@ export default function SubscriptionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
+
+  const loadBillingInfo = useCallback(async () => {
+    setIsLoadingBilling(true);
+    try {
+      const response = await fetch("/api/polar/billing-info");
+      if (response.ok) {
+        const data = await response.json();
+        console.log("[subscription-page] Billing info data:", data);
+        setBillingInfo(data.billingInfo);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Failed to load billing information:", response.status, errorData);
+      }
+    } catch (error) {
+      console.error("Error loading billing information:", error);
+    } finally {
+      setIsLoadingBilling(false);
+    }
+  }, []);
+
+  const loadBillingHistory = useCallback(async () => {
+    setIsLoadingHistory(true);
+    try {
+      const response = await fetch("/api/polar/billing-history");
+      if (response.ok) {
+        const data = await response.json();
+        console.log("[subscription-page] Billing history data:", data);
+        setBillingHistory(data.invoices || []);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Failed to load billing history:", response.status, errorData);
+      }
+    } catch (error) {
+      console.error("Error loading billing history:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -58,44 +96,6 @@ export default function SubscriptionPage() {
       }
     };
 
-    const loadBillingInfo = async () => {
-      setIsLoadingBilling(true);
-      try {
-        const response = await fetch("/api/polar/billing-info");
-        if (response.ok) {
-          const data = await response.json();
-          console.log("[subscription-page] Billing info data:", data);
-          setBillingInfo(data.billingInfo);
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          console.error("Failed to load billing information:", response.status, errorData);
-        }
-      } catch (error) {
-        console.error("Error loading billing information:", error);
-      } finally {
-        setIsLoadingBilling(false);
-      }
-    };
-
-    const loadBillingHistory = async () => {
-      setIsLoadingHistory(true);
-      try {
-        const response = await fetch("/api/polar/billing-history");
-        if (response.ok) {
-          const data = await response.json();
-          console.log("[subscription-page] Billing history data:", data);
-          setBillingHistory(data.invoices || []);
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          console.error("Failed to load billing history:", response.status, errorData);
-        }
-      } catch (error) {
-        console.error("Error loading billing history:", error);
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    };
-
     loadData();
 
     // Check for payment update success
@@ -109,7 +109,7 @@ export default function SubscriptionPage() {
         loadBillingHistory();
       }, 1000);
     }
-  }, [supabase, router, searchParams]);
+  }, [supabase, router, searchParams, loadBillingInfo, loadBillingHistory]);
 
   const handleOpenCustomerPortal = async () => {
     setIsOpeningPortal(true);
@@ -605,5 +605,17 @@ export default function SubscriptionPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function SubscriptionPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <SubscriptionPageContent />
+    </Suspense>
   );
 }
