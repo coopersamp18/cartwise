@@ -50,7 +50,6 @@ INSERT INTO tags (name, category) VALUES
   ('Whole30', 'dietary'),
   ('Mediterranean', 'dietary'),
   ('Low Sodium', 'dietary'),
-  ('High Protein', 'dietary'),
   ('Low Fat', 'dietary'),
   ('Sugar Free', 'dietary')
 ON CONFLICT (name) DO NOTHING;

@@ -161,24 +161,26 @@ export default function RecipePage() {
               />
             </div>
           )}
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+            <div className="flex-1 min-w-0">
               {recipe.category && (
                 <span className="text-sm font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
                   {recipe.category}
                 </span>
               )}
-              <h1 className="font-serif text-4xl font-bold mt-3">{recipe.title}</h1>
+              <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold mt-3 break-words">{recipe.title}</h1>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0 sm:self-start">
               <Button
                 variant={recipe.is_selected ? "primary" : "secondary"}
                 onClick={toggleSelection}
+                className="w-full sm:w-auto"
               >
                 {recipe.is_selected ? (
                   <>
                     <CheckSquare className="w-4 h-4 mr-2" />
-                    In Shopping List
+                    <span className="hidden sm:inline">In Shopping List</span>
+                    <span className="sm:hidden">In List</span>
                   </>
                 ) : (
                   <>
@@ -279,7 +281,7 @@ export default function RecipePage() {
 
           {/* Instructions */}
           <div className="md:col-span-2">
-            <Card>
+            <Card className="md:sticky md:top-24 md:self-start">
               <CardContent className="p-6">
                 <h2 className="font-serif text-xl font-bold mb-6">Instructions</h2>
                 <ol className="space-y-6">

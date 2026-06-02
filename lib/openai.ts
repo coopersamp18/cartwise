@@ -4,7 +4,7 @@ export const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-import { NutritionData } from "./types";
+import { NutritionData, Tag } from "./types";
 
 export interface ParsedRecipe {
   title: string;
@@ -234,4 +234,75 @@ Note: Only include the "nutrition" object if it's explicitly provided in the rec
   }
   
   return JSON.parse(content) as ParsedRecipe;
+}
+
+/**
+ * Suggests appropriate tags for a recipe based on its content using AI.
+ * Returns an array of tag names that match the available tags.
+ */
+export async function suggestTagsForRecipe(
+  recipe: ParsedRecipe,
+  availableTags: Tag[]
+): Promise<string[]> {
+  // Build a list of available tag names for the AI to choose from
+  const availableTagNames = availableTags.map((tag) => tag.name);
+  
+  // Build recipe summary for AI analysis
+  const recipeSummary = {
+    title: recipe.title,
+    description: recipe.description,
+    category: recipe.category,
+    ingredients: recipe.ingredients.map((ing) => ing.name).join(", "),
+    nutrition: recipe.nutrition,
+  };
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content: `You are a recipe tagging assistant. Analyze the provided recipe and suggest the most appropriate tags from the available tags list.
+
+Available tags: ${availableTagNames.join(", ")}
+
+Consider:
+- Ingredients (e.g., if it contains meat, suggest "Protein Heavy"; if no animal products, suggest "Vegan" or "Plant Based")
+- Nutritional profile (e.g., if low carbs, suggest "Low Carb" or "Keto Friendly"; if high fiber, suggest "High Fiber")
+- Dietary restrictions (e.g., if no gluten ingredients, suggest "Gluten Free"; if no dairy, suggest "Dairy Free")
+- Cooking methods and cuisine types if relevant tags exist
+
+Be selective - only suggest tags that are clearly applicable. Aim for 2-5 tags maximum unless the recipe clearly fits many categories.
+
+Return a JSON object with this structure:
+{
+  "suggestedTags": ["Tag Name 1", "Tag Name 2", ...]
+}
+
+Only include tag names that exactly match the available tags list. If no tags are clearly applicable, return an empty array.`
+      },
+      {
+        role: "user",
+        content: `Recipe to analyze:\n${JSON.stringify(recipeSummary, null, 2)}`
+      }
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.3,
+  });
+
+  const content = response.choices[0].message.content;
+  if (!content) {
+    return [];
+  }
+
+  try {
+    const result = JSON.parse(content) as { suggestedTags: string[] };
+    // Filter to only include tags that actually exist in availableTags
+    const validTagNames = result.suggestedTags?.filter((tagName) =>
+      availableTagNames.includes(tagName)
+    ) || [];
+    return validTagNames;
+  } catch (error) {
+    console.error("Error parsing tag suggestions:", error);
+    return [];
+  }
 }

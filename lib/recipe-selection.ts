@@ -4,6 +4,7 @@ type ShoppingListIngredient = {
   id: string;
   name: string;
   quantity: string | null;
+  unit: string | null;
   aisle_category: string | null;
 };
 
@@ -48,15 +49,23 @@ export async function toggleRecipeSelectionWithShoppingList({
       data: { user },
     } = await supabase.auth.getUser();
 
-    const shoppingItems = currentIngredients.map((ing) => ({
-      user_id: user?.id,
-      recipe_id: recipeId,
-      ingredient_id: ing.id,
-      name: ing.name,
-      quantity: ing.quantity,
-      aisle_category: ing.aisle_category,
-      checked: false,
-    }));
+    const shoppingItems = currentIngredients.map((ing) => {
+      // Combine quantity and unit into a single string (e.g., "2 cups")
+      let fullQuantity = ing.quantity || "";
+      if (ing.unit) {
+        fullQuantity = fullQuantity ? `${fullQuantity} ${ing.unit}` : ing.unit;
+      }
+      
+      return {
+        user_id: user?.id,
+        recipe_id: recipeId,
+        ingredient_id: ing.id,
+        name: ing.name,
+        quantity: fullQuantity || null,
+        aisle_category: ing.aisle_category,
+        checked: false,
+      };
+    });
 
     await supabase.from("shopping_list").insert(shoppingItems);
   } else {

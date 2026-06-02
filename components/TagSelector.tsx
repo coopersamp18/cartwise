@@ -74,10 +74,10 @@ export default function TagSelector({
                   key={tag.id}
                   type="button"
                   onClick={() => toggleTag(tag.id)}
-                  className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                  className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ease-in-out ${
                     selectedTagIds.includes(tag.id)
-                      ? "bg-primary text-white"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      ? "bg-primary text-white shadow-md"
+                      : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary hover:scale-105 hover:shadow-sm"
                   }`}
                 >
                   {tag.name}

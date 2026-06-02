@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button, Card, CardContent, Tooltip } from "@/components/ui";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 import RecipeFiltersComponent, { RecipeFilters } from "@/components/RecipeFilters";
-import { Recipe, ShoppingListItem, Subscription, Tag } from "@/lib/types";
+import { Recipe, ShoppingListItem, Subscription, Tag, PantryItem } from "@/lib/types";
 import { parseTimeToMinutes } from "@/lib/time";
 import { toggleRecipeSelectionWithShoppingList } from "@/lib/recipe-selection";
 import { 
@@ -28,7 +28,10 @@ import {
   Flame,
   Beef,
   Wheat,
-  Droplet
+  Droplet,
+  Package,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 const AISLE_ORDER = [
@@ -60,14 +63,15 @@ export default function DashboardPage() {
   const [filters, setFilters] = useState<RecipeFilters>({
     category: null,
     tags: [],
-    prepTimeMax: null,
-    cookTimeMax: null,
     totalTimeMax: null,
   });
   const [showArchived, setShowArchived] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"recipes" | "shopping">("recipes");
+  const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
+  const [showPantry, setShowPantry] = useState(true);
+  const [newPantryItem, setNewPantryItem] = useState({ name: "", quantity: "" });
   const router = useRouter();
   const supabase = createClient();
 
@@ -81,7 +85,7 @@ export default function DashboardPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [recipesResult, tagsResult, shoppingResult] = await Promise.all([
+      const [recipesResult, tagsResult, shoppingResult, pantryResult] = await Promise.all([
         supabase
           .from("recipes")
           .select(
@@ -102,6 +106,10 @@ export default function DashboardPage() {
           .from("shopping_list")
           .select("*")
           .order("aisle_category", { ascending: true }),
+        supabase
+          .from("pantry_items")
+          .select("*")
+          .order("aisle_category", { ascending: true }),
       ]);
 
       const recipesData = recipesResult.data;
@@ -120,6 +128,10 @@ export default function DashboardPage() {
 
       if (shoppingResult.data) {
         setShoppingList(shoppingResult.data);
+      }
+
+      if (pantryResult.data) {
+        setPantryItems(pantryResult.data);
       }
     } catch (error) {
       console.error("Error loading data:", error);
@@ -186,22 +198,6 @@ export default function DashboardPage() {
       });
     }
 
-    // Filter by prep time
-    if (filters.prepTimeMax) {
-      filtered = filtered.filter((recipe) => {
-        const prepTime = recipe.prep_time_minutes || parseTimeToMinutes(recipe.prep_time);
-        return prepTime !== null && prepTime <= filters.prepTimeMax!;
-      });
-    }
-
-    // Filter by cook time
-    if (filters.cookTimeMax) {
-      filtered = filtered.filter((recipe) => {
-        const cookTime = recipe.cook_time_minutes || parseTimeToMinutes(recipe.cook_time);
-        return cookTime !== null && cookTime <= filters.cookTimeMax!;
-      });
-    }
-
     // Filter by total time
     if (filters.totalTimeMax) {
       filtered = filtered.filter((recipe) => {
@@ -257,15 +253,22 @@ export default function DashboardPage() {
     }
   };
 
-  const toggleShoppingItem = async (itemId: string, checked: boolean) => {
+  const toggleShoppingItem = async (itemName: string, checked: boolean) => {
+    // Find all items with this name (case-insensitive) to toggle them all
+    const itemsToToggle = shoppingList.filter(
+      (item) => item.name.toLowerCase().trim() === itemName.toLowerCase().trim()
+    );
+    
+    const itemIds = itemsToToggle.map((item) => item.id);
+    
     await supabase
       .from("shopping_list")
       .update({ checked: !checked })
-      .eq("id", itemId);
+      .in("id", itemIds);
 
     setShoppingList((prev) =>
       prev.map((item) =>
-        item.id === itemId ? { ...item, checked: !checked } : item
+        itemIds.includes(item.id) ? { ...item, checked: !checked } : item
       )
     );
   };
@@ -296,10 +299,73 @@ export default function DashboardPage() {
     loadData();
   };
 
+  // Combine duplicate ingredients in shopping list
+  const combineShoppingItems = (items: ShoppingListItem[]): ShoppingListItem[] => {
+    const combined = new Map<string, ShoppingListItem>();
+    
+    // Helper to parse quantity and unit (e.g., "2 cups" -> { num: 2, unit: "cups" })
+    const parseQuantity = (qty: string | null) => {
+      if (!qty) return { num: 0, unit: "", raw: "" };
+      const match = qty.match(/^([\d.\/]+)\s*(.*)$/);
+      if (match) {
+        // Handle fractions like "1/2"
+        let num = 0;
+        if (match[1].includes("/")) {
+          const [numerator, denominator] = match[1].split("/");
+          num = parseFloat(numerator) / parseFloat(denominator);
+        } else {
+          num = parseFloat(match[1]);
+        }
+        return { num: isNaN(num) ? 0 : num, unit: match[2].trim().toLowerCase(), raw: qty };
+      }
+      return { num: 0, unit: "", raw: qty };
+    };
+    
+    for (const item of items) {
+      const key = item.name.toLowerCase().trim();
+      const existing = combined.get(key);
+      
+      if (existing) {
+        const existingParsed = parseQuantity(existing.quantity);
+        const newParsed = parseQuantity(item.quantity);
+        
+        // Only combine if both have numeric quantities AND same unit (or no unit)
+        if (existingParsed.num > 0 && newParsed.num > 0 && existingParsed.unit === newParsed.unit) {
+          const totalNum = existingParsed.num + newParsed.num;
+          const unit = existingParsed.unit;
+          combined.set(key, {
+            ...existing,
+            quantity: unit ? `${totalNum} ${unit}` : String(totalNum),
+            checked: existing.checked && item.checked,
+          });
+        } else if (existing.quantity && item.quantity) {
+          // Different units or can't parse - concatenate
+          combined.set(key, {
+            ...existing,
+            quantity: `${existing.quantity} + ${item.quantity}`,
+            checked: existing.checked && item.checked,
+          });
+        } else {
+          // One or both have no quantity
+          const qty = existing.quantity || item.quantity || null;
+          combined.set(key, {
+            ...existing,
+            quantity: qty,
+            checked: existing.checked && item.checked,
+          });
+        }
+      } else {
+        combined.set(key, { ...item });
+      }
+    }
+    
+    return Array.from(combined.values());
+  };
+
   const groupedShoppingList = AISLE_ORDER.reduce((acc, aisle) => {
     const items = shoppingList.filter((item) => item.aisle_category === aisle);
     if (items.length > 0) {
-      acc[aisle] = items;
+      acc[aisle] = combineShoppingItems(items);
     }
     return acc;
   }, {} as Record<string, ShoppingListItem[]>);
@@ -332,6 +398,77 @@ export default function DashboardPage() {
     } else {
       loadData();
     }
+  };
+
+  const addPantryItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPantryItem.name.trim()) return;
+
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) return;
+
+    const { data, error } = await supabase.from("pantry_items").insert({
+      user_id: currentUser.id,
+      name: newPantryItem.name.trim(),
+      quantity: newPantryItem.quantity.trim() || null,
+      aisle_category: "Other",
+    }).select();
+
+    if (error) {
+      console.error("Error adding pantry item:", error);
+      alert(`Failed to add pantry item: ${error.message}`);
+    } else {
+      console.log("Pantry item added:", data);
+      setNewPantryItem({ name: "", quantity: "" });
+      loadData();
+    }
+  };
+
+  const deletePantryItem = async (itemId: string) => {
+    const { error } = await supabase
+      .from("pantry_items")
+      .delete()
+      .eq("id", itemId);
+
+    if (error) {
+      console.error("Error deleting pantry item:", error);
+    } else {
+      setPantryItems((prev) => prev.filter((item) => item.id !== itemId));
+    }
+  };
+
+  const clearAllPantryItems = async () => {
+    if (!confirm("Are you sure you want to clear all pantry items?")) return;
+    
+    const { error } = await supabase
+      .from("pantry_items")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+
+    if (error) {
+      console.error("Error clearing pantry:", error);
+    } else {
+      setPantryItems([]);
+    }
+  };
+
+  // Group pantry items by aisle
+  const groupedPantryItems = AISLE_ORDER.reduce((acc, aisle) => {
+    const items = pantryItems.filter((item) => item.aisle_category === aisle);
+    if (items.length > 0) {
+      acc[aisle] = items;
+    }
+    return acc;
+  }, {} as Record<string, PantryItem[]>);
+
+  // Create a Set of pantry item names for quick lookup (case-insensitive)
+  const pantryItemNames = new Set(
+    pantryItems.map((item) => item.name.toLowerCase().trim())
+  );
+
+  // Check if a shopping item is in the pantry
+  const isInPantry = (itemName: string) => {
+    return pantryItemNames.has(itemName.toLowerCase().trim());
   };
 
   if (isLoading) {
@@ -637,77 +774,219 @@ export default function DashboardPage() {
 
             {/* Shopping List Tab */}
             {activeTab === "shopping" && (
-              <>
-            {shoppingList.length === 0 ? (
-              <Card>
-                <CardContent className="py-16 text-center">
-                  <ShoppingCart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="font-serif text-xl font-bold mb-2">
-                    Shopping list is empty
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Select recipes from your recipe book to add ingredients
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-6">
-                {/* Actions */}
-                <div className="flex items-center gap-3">
-                  <Button 
-                    variant="secondary" 
-                    size="sm"
-                    onClick={clearCheckedItems}
-                    disabled={!shoppingList.some((i) => i.checked)}
-                  >
-                    <Check className="w-4 h-4 mr-2" />
-                    Clear checked
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={clearAllItems}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Clear all
-                  </Button>
-                </div>
+              <div className="space-y-8">
+                {/* Shopping List Section */}
+                {shoppingList.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-16 text-center">
+                      <ShoppingCart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="font-serif text-xl font-bold mb-2">
+                        Shopping list is empty
+                      </h3>
+                      <p className="text-muted-foreground">
+                        Select recipes from your recipe book to add ingredients
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Actions */}
+                    <div className="flex items-center gap-3">
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={clearCheckedItems}
+                        disabled={!shoppingList.some((i) => i.checked)}
+                      >
+                        <Check className="w-4 h-4 mr-2" />
+                        Clear checked
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={clearAllItems}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Clear all
+                      </Button>
+                    </div>
 
-                {/* Grouped by aisle */}
-                <div className="space-y-6">
-                  {Object.entries(groupedShoppingList).map(([aisle, items]) => (
-                    <Card key={aisle}>
-                      <CardContent className="p-6">
-                        <h3 className="font-serif text-lg font-bold mb-4 flex items-center gap-2">
-                          <span className="w-2 h-2 bg-primary rounded-full"></span>
-                          {aisle}
-                        </h3>
-                        <ul className="space-y-2">
-                          {items.map((item) => (
-                            <li
-                              key={item.id}
-                              className="flex items-center gap-3 p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
-                              onClick={() => toggleShoppingItem(item.id, item.checked)}
-                            >
-                              {item.checked ? (
-                                <CheckSquare className="w-5 h-5 text-primary flex-shrink-0" />
-                              ) : (
-                                <Square className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                              )}
-                              <span className={item.checked ? "line-through text-muted-foreground" : ""}>
-                                {item.quantity && `${item.quantity} `}
-                                {item.name}
-                              </span>
-                            </li>
-                          ))}
+                    {/* Grouped by aisle */}
+                    <div className="space-y-6">
+                      {Object.entries(groupedShoppingList).map(([aisle, items]) => (
+                        <Card key={aisle}>
+                          <CardContent className="p-6">
+                            <h3 className="font-serif text-lg font-bold mb-4 flex items-center gap-2">
+                              <span className="w-2 h-2 bg-primary rounded-full"></span>
+                              {aisle}
+                            </h3>
+<ul className="space-y-2">
+                          {items.map((item) => {
+                            const inPantry = isInPantry(item.name);
+                            const isCrossedOut = item.checked || inPantry;
+                            return (
+                              <li
+                                key={item.id}
+                                className="flex items-center gap-3 p-2 hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                                onClick={() => toggleShoppingItem(item.name, item.checked)}
+                              >
+                                {item.checked ? (
+                                  <CheckSquare className="w-5 h-5 text-primary flex-shrink-0" />
+                                ) : inPantry ? (
+                                  <Package className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                                ) : (
+                                  <Square className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                                )}
+                                <span className={isCrossedOut ? "line-through text-muted-foreground" : ""}>
+                                  {item.quantity && `${item.quantity} `}
+                                  {item.name}
+                                </span>
+                                {inPantry && !item.checked && (
+                                  <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ml-auto">
+                                    in pantry
+                                  </span>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pantry Section */}
+                <div className="border-t border-border pt-8">
+                  <button
+                    onClick={() => setShowPantry(!showPantry)}
+                    className="w-full flex items-center justify-between mb-6 group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                        <Package className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div className="text-left">
+                        <h2 className="font-serif text-xl font-bold">My Pantry</h2>
+                        <p className="text-sm text-muted-foreground">
+                          {pantryItems.length} item{pantryItems.length !== 1 ? "s" : ""} in stock
+                        </p>
+                      </div>
+                    </div>
+                    {showPantry ? (
+                      <ChevronUp className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    )}
+                  </button>
+
+                  {showPantry && (
+                    <div className="space-y-6">
+                      {/* Add Pantry Item Form */}
+                      <Card>
+                        <CardContent className="p-4">
+                          <form onSubmit={addPantryItem} className="flex gap-3">
+                            <input
+                              type="text"
+                              placeholder="Item name (e.g., Olive oil)"
+                              value={newPantryItem.name}
+                              onChange={(e) => setNewPantryItem({ ...newPantryItem, name: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && newPantryItem.name.trim()) {
+                                  e.preventDefault();
+                                  addPantryItem(e as unknown as React.FormEvent);
+                                }
+                              }}
+                              className="flex-1 px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Qty (optional)"
+                              value={newPantryItem.quantity}
+                              onChange={(e) => setNewPantryItem({ ...newPantryItem, quantity: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && newPantryItem.name.trim()) {
+                                  e.preventDefault();
+                                  addPantryItem(e as unknown as React.FormEvent);
+                                }
+                              }}
+                              className="w-32 px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            />
+                            <Button type="submit" disabled={!newPantryItem.name.trim()}>
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add
+                            </Button>
+                          </form>
+                        </CardContent>
+                      </Card>
+
+                      {/* Pantry Items List */}
+                      {pantryItems.length === 0 ? (
+                        <Card>
+                          <CardContent className="py-12 text-center">
+                            <Package className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                            <h3 className="font-medium mb-1">Your pantry is empty</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Add items you already have at home
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        <>
+                          {/* Clear All Button */}
+                          <div className="flex justify-end">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={clearAllPantryItems}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Clear pantry
+                            </Button>
+                          </div>
+
+                          {/* Grouped by aisle */}
+                          <div className="space-y-4">
+                            {Object.entries(groupedPantryItems).map(([aisle, items]) => (
+                              <Card key={aisle}>
+                                <CardContent className="p-4">
+                                  <h3 className="font-medium text-sm text-muted-foreground mb-3 flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                                    {aisle}
+                                  </h3>
+                                  <ul className="space-y-1">
+                                    {items.map((item) => (
+                                      <li
+                                        key={item.id}
+                                        className="flex items-center justify-between gap-3 p-2 hover:bg-muted rounded-lg transition-colors group"
+                                      >
+                                        <span className="text-sm">
+                                          {item.quantity && (
+                                            <span className="text-muted-foreground">{item.quantity} </span>
+                                          )}
+                                          {item.name}
+                                        </span>
+                                        <button
+                                          onClick={() => deletePantryItem(item.id)}
+                                          className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all"
+                                          title="Remove from pantry"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-              </>
             )}
           </div>
         </div>

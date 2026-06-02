@@ -78,6 +78,36 @@ export default function NewRecipePage() {
     }
   };
 
+  // Auto-select AI-suggested tags when recipe is extracted and tags are loaded
+  useEffect(() => {
+    const autoSelectTags = async () => {
+      if (!parsedRecipe || tags.length === 0) return;
+
+      try {
+        const response = await fetch("/api/suggest-tags", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipe: parsedRecipe,
+            availableTags: tags,
+          }),
+        });
+
+        if (response.ok) {
+          const { suggestedTagIds } = await response.json();
+          if (suggestedTagIds && suggestedTagIds.length > 0) {
+            setSelectedTagIds(suggestedTagIds);
+          }
+        }
+      } catch (error) {
+        // Silently fail - tag suggestions are optional
+        console.error("Failed to get tag suggestions:", error);
+      }
+    };
+
+    autoSelectTags();
+  }, [parsedRecipe, tags]);
+
   const handleSave = async () => {
     if (!parsedRecipe) return;
 

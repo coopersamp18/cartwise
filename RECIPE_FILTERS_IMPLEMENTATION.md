@@ -22,12 +22,12 @@ Run the migration file `supabase/add_recipe_tags_and_favorites.sql` in your Supa
 6. Set up proper indexes and RLS policies
 
 ### Pre-populated Tags
-The migration includes 20 common dietary tags:
+The migration includes 19 common dietary tags:
 - Keto Friendly, Protein Heavy, Plant Based, Vegan, Vegetarian
 - Gluten Free, Dairy Free, Nut Free
 - Calorie Smart, Carb Smart, Low Carb, High Fiber
 - Gut Friendly, Paleo, Whole30, Mediterranean
-- Low Sodium, High Protein, Low Fat, Sugar Free
+- Low Sodium, Low Fat, Sugar Free
 
 ## New Components
 

@@ -9,8 +9,6 @@ import { X, Filter, Clock, BookOpen, ShoppingCart, Star, Archive, ArchiveRestore
 export interface RecipeFilters {
   category: RecipeCategory | null;
   tags: string[]; // Tag IDs
-  prepTimeMax: number | null; // Maximum prep time in minutes
-  cookTimeMax: number | null; // Maximum cook time in minutes
   totalTimeMax: number | null; // Maximum total time in minutes
 }
 
@@ -85,8 +83,6 @@ export default function RecipeFiltersComponent({
     onFiltersChange({
       category: null,
       tags: [],
-      prepTimeMax: null,
-      cookTimeMax: null,
       totalTimeMax: null,
     });
   };
@@ -94,8 +90,6 @@ export default function RecipeFiltersComponent({
   const activeFilterCount =
     (filters.category ? 1 : 0) +
     filters.tags.length +
-    (filters.prepTimeMax ? 1 : 0) +
-    (filters.cookTimeMax ? 1 : 0) +
     (filters.totalTimeMax ? 1 : 0);
 
   return (
@@ -234,10 +228,10 @@ export default function RecipeFiltersComponent({
                       onClick={() =>
                         updateFilter("category", filters.category === category ? null : category)
                       }
-                      className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                      className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ease-in-out ${
                         filters.category === category
-                          ? "bg-primary text-white"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          ? "bg-primary text-white shadow-md"
+                          : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary hover:scale-105 hover:shadow-sm"
                       }`}
                     >
                       {category}
@@ -246,85 +240,31 @@ export default function RecipeFiltersComponent({
                 </div>
               </div>
 
-              {/* Time Filters */}
-              <div className="space-y-4">
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium mb-3">
-                    <Clock className="w-4 h-4" />
-                    Prep Time (max)
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {TIME_RANGES.map((range) => (
-                      <button
-                        key={range.value}
-                        onClick={() =>
-                          updateFilter(
-                            "prepTimeMax",
-                            filters.prepTimeMax === range.value ? null : range.value
-                          )
-                        }
-                        className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                          filters.prepTimeMax === range.value
-                            ? "bg-primary text-white"
-                            : "bg-muted text-muted-foreground hover:bg-muted/80"
-                        }`}
-                      >
-                        {range.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-3 block">
-                    Cook Time (max)
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {TIME_RANGES.map((range) => (
-                      <button
-                        key={range.value}
-                        onClick={() =>
-                          updateFilter(
-                            "cookTimeMax",
-                            filters.cookTimeMax === range.value ? null : range.value
-                          )
-                        }
-                        className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                          filters.cookTimeMax === range.value
-                            ? "bg-primary text-white"
-                            : "bg-muted text-muted-foreground hover:bg-muted/80"
-                        }`}
-                      >
-                        {range.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-3 block">
-                    Total Time (max)
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {TIME_RANGES.map((range) => (
-                      <button
-                        key={range.value}
-                        onClick={() =>
-                          updateFilter(
-                            "totalTimeMax",
-                            filters.totalTimeMax === range.value ? null : range.value
-                          )
-                        }
-                        className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                          filters.totalTimeMax === range.value
-                            ? "bg-primary text-white"
-                            : "bg-muted text-muted-foreground hover:bg-muted/80"
-                        }`}
-                      >
-                        {range.label}
-                      </button>
-                    ))}
-                  </div>
+              {/* Time Filter */}
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium mb-3">
+                  <Clock className="w-4 h-4" />
+                  Total Time (max)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {TIME_RANGES.map((range) => (
+                    <button
+                      key={range.value}
+                      onClick={() =>
+                        updateFilter(
+                          "totalTimeMax",
+                          filters.totalTimeMax === range.value ? null : range.value
+                        )
+                      }
+                      className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ease-in-out ${
+                        filters.totalTimeMax === range.value
+                          ? "bg-primary text-white shadow-md"
+                          : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary hover:scale-105 hover:shadow-sm"
+                      }`}
+                    >
+                      {range.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -339,10 +279,10 @@ export default function RecipeFiltersComponent({
                       <button
                         key={tag.id}
                         onClick={() => toggleTag(tag.id)}
-                        className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                        className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ease-in-out ${
                           filters.tags.includes(tag.id)
-                            ? "bg-primary text-white"
-                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                            ? "bg-primary text-white shadow-md"
+                            : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary hover:scale-105 hover:shadow-sm"
                         }`}
                       >
                         {tag.name}
@@ -414,8 +354,6 @@ export function RecipeFiltersButton({
   const activeFilterCount =
     (filters.category ? 1 : 0) +
     filters.tags.length +
-    (filters.prepTimeMax ? 1 : 0) +
-    (filters.cookTimeMax ? 1 : 0) +
     (filters.totalTimeMax ? 1 : 0);
 
   return (
